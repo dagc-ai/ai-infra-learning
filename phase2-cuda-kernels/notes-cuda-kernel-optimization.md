@@ -319,3 +319,123 @@ instead of hardware.
 *Phase 2 complete. Exercises: vec_add, naive matmul, tiled matmul, softmax kernel.*
 *Profiled with ncu. Benchmark table filled with real measured numbers.*
 *Next: Phase 3 — Triton and Flash Attention.*
+
+---
+
+## Exercise 2.3 — Softmax Kernel & Warp Shuffle Reduction
+
+### The Core Problem Softmax Exposes
+
+Matrix multiply is embarrassingly parallel — thread (i,j) computes its output
+independently of every other thread. Softmax is not. To normalize any single element,
+you first need the sum of all elements in the row. To compute that sum stably, you first
+need the row maximum. There is a dependency chain that runs across the entire row before
+a single output can be written.
+
+The naive approach is three separate kernel launches: find max, compute exp and sum,
+normalize. Three full round trips to HBM — read the row, write a result, read it again,
+write again, read again, write final output. Six HBM transactions for data that only
+needs to be read once.
+
+The warp shuffle kernel does all three passes in registers without touching HBM between
+them. One read, one write. That is the fusion insight.
+
+### Measured Results — RTX 4090
+```
+Kernel:  softmaxKernel (4096 rows x 32 cols)
+Global load bytes:    1.57 MB   (input read once — exactly 4096 x 32 x 4 bytes + intermediate)
+SM throughput:        11.45%    (low — each row is only 32 floats, not enough work per block)
+Correctness:          row sums = 1.000000 across all 4096 rows
+```
+
+The 11.45% SM throughput is expected and uninteresting. Each row is 32 floats — the
+kernel does a tiny amount of work and exits. In production this kernel never runs
+standalone. It gets fused into a larger operation where the softmax happens in registers
+while Q, K, and V data is already loaded. The standalone number is irrelevant. The
+pattern is what matters.
+
+### Why the Warp Shuffle Is the Right Tool
+
+The reduction — collapsing 32 values to one max or one sum — has to happen somehow.
+
+Option A: shared memory with __syncthreads().
+Requires allocating SRAM, writing to it, issuing a barrier stalling the entire block,
+then reading back. Two SRAM round trips and one full synchronization stall minimum.
+
+Option B: warp shuffle through the register file.
+5 steps, ~1 cycle each, no memory allocation, no barrier.
+
+Step 1 (offset=16): thread 0 gets thread 16's value -> holds max(v0, v16)
+Step 2 (offset=8):  thread 0 gets thread 8's value  -> holds max(v0, v8, v16, v24)
+Step 3 (offset=4):  ...
+Step 5 (offset=1):  thread 0 holds the true row max
+
+The warp shuffle works because all 32 threads in a warp execute in lockstep. The hardware
+guarantee that looks like a constraint — all threads must do the same thing — becomes an
+asset when you need to reduce across threads. Lockstep execution means no coordination
+overhead is needed to safely exchange values.
+
+### The Flash Attention Connection
+
+Standard attention computes the full NxN matrix of attention scores, writes to HBM, reads
+back for softmax, writes softmax output to HBM, reads back for weighted sum with V. For
+sequence length 100K, that matrix is 100,000 x 100,000 floats = 40GB. It does not fit
+in HBM, let alone SRAM. The operation is impossible at that scale without fusion.
+
+Flash Attention processes the attention matrix in tiles, maintaining two running scalars:
+a running max and a running sum that update as each new tile arrives. Those running
+statistics use exactly the warp shuffle pattern from Exercise 2.3, generalized from
+thread-level to tile-level. At any moment, only the current tile and two scalars are in
+SRAM. The full NxN matrix never exists in memory.
+
+Result: attention memory complexity drops from O(N^2) to O(N). That is the direct reason
+100K+ context windows are computationally feasible. Without fused kernels, every
+additional token in context costs quadratically more memory.
+
+In Phase 3, the Triton Flash Attention kernel variables m_i (running max) and l_i
+(running sum) are exactly this pattern. You will recognize them immediately.
+
+### GTM Implications
+
+**Kernel fusion is the difference between feasible and impossible at scale — not a
+performance optimization.**
+
+The difference between unfused and fused softmax at long context lengths is not 10%
+faster. It is the difference between an operation that fits in memory and one that
+does not. A 70B model running unfused attention at 100K context would require
+materializing attention matrices that exceed GPU memory entirely. Fusion is what makes
+the workload possible, not just faster.
+
+When evaluating inference infrastructure for long-context workloads, the question is:
+does the serving stack use fused attention kernels? vLLM does. Naive frameworks do not.
+The performance gap at 32K+ context is not marginal.
+
+**Fusion is also a hardware evaluation question.**
+
+Fused kernels require keeping intermediate results on-chip across what would otherwise
+be separate operations. The hardware question is: is SRAM per compute unit large enough
+to hold the KV tiles for the target sequence length and head dimension, and does the
+programming model make tile-level fusion expressible?
+
+This is a specific, checkable claim. A vendor saying "our SRAM per core holds your KV
+tiles at your head dimension and sequence length" is giving you something you can verify.
+A vendor saying "our hardware is optimized for transformers" is not.
+
+**The O(N^2) to O(N) memory story is one of the most powerful customer conversations
+in AI infrastructure right now.**
+
+Context length is the most requested capability expansion in enterprise LLM deployments.
+Legal document analysis, long-form code review, extended conversation history — all want
+longer context. The bottleneck in every case is attention memory complexity. Flash
+Attention solved it at the algorithm level, but only for hardware and software stacks
+that can execute fused kernels efficiently.
+
+The rep who can walk a customer through why their 32K context limit exists, what would
+have to be true at the hardware and software layer to extend it, and how different vendors
+stack up on those dimensions is operating in a completely different category than someone
+reciting context window specs from a product sheet.
+
+---
+
+*Exercise 2.3 complete. Warp shuffle reduction, numerical stability, kernel fusion.*
+*Softmax pattern is the direct precursor to Flash Attention in Phase 3.*
