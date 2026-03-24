@@ -1,5 +1,5 @@
 # GPU Architecture Primer
-*Phase 1 — ai-infra-learning. Written to explain GPU architecture to a technical customer or hiring manager.*
+*Phase 1 — ai-infra-learning. Written to explain GPU architecture to a technical audience.*
 
 ---
 
@@ -18,7 +18,7 @@ A GPU is fundamentally a **latency-hiding machine** — not a low-latency machin
 
 **Key constraint:** Threads within a block can communicate via shared memory and synchronize with `__syncthreads()`. Threads in different blocks cannot communicate during execution. This shapes how algorithms must be structured for the GPU.
 
-**Warp divergence:** If threads within a warp take different code paths (an if/else branch), both paths execute and non-participating threads are masked off. Throughput drops proportionally to how divergent the execution is. For regular ML workloads (attention, dense layers), divergence is minimal. For irregular data structures (graphs, sparse ops), divergence is a serious concern — and an opening for alternative architectures.
+**Warp divergence:** If threads within a warp take different code paths (an if/else branch), both paths execute and non-participating threads are masked off. Throughput drops proportionally to how divergent the execution is. For regular ML workloads (attention, dense layers), divergence is minimal. For irregular data structures (graphs, sparse ops), divergence is a serious concern — and an architectural opening that alternative designs try to exploit.
 
 ---
 
@@ -93,7 +93,7 @@ The **ridge point** (where they intersect) ≈ **327 FLOP/byte** for FP16 on the
 
 Threads in a warp access memory together. If 32 threads each access consecutive addresses (elements 0–31 of an array), the hardware satisfies all 32 accesses in one memory transaction. If those 32 threads each access scattered addresses (every 64th element), you need 32 separate transactions — 32× the memory traffic for the same data.
 
-**For a customer conversation:** "Strided or random memory access patterns can reduce effective bandwidth by 10–32× versus the peak spec. When evaluating whether a model will run well on new hardware, access pattern regularity often matters as much as raw bandwidth numbers."
+Strided or random memory access patterns can reduce effective bandwidth by 10–32× versus the peak spec. Access pattern regularity often matters as much as raw bandwidth numbers when evaluating real workload performance.
 
 ---
 
@@ -110,14 +110,20 @@ If **both are low**, you have an occupancy or launch overhead problem — not en
 
 ---
 
-## The GTM Bridge: SRAM vs. HBM Architecture
+## The SRAM vs. HBM Architecture Tradeoff
 
-Tenstorrent's Tensix architecture makes a fundamentally different tradeoff: more SRAM per compute unit, no HBM. The bet is that for inference-optimized workloads with high data reuse (transformer layers, attention), SRAM residency matters more than raw memory capacity. This makes sense when you look at the 100× latency gap between SRAM and HBM — for operations that fit in SRAM, you eliminate that bottleneck entirely.
+The GPU memory hierarchy reveals a fundamental design tension that different accelerator architectures resolve differently.
 
-The tradeoff: smaller total capacity limits model size (weights + activations) you can hold on-chip. For large-batch training with massive activations, HBM capacity wins. For high-throughput inference with quantized models that fit in SRAM, the argument is that the architecture wins on efficiency.
+**The NVIDIA GPU approach (HBM-centric):** Large off-chip memory (HBM) provides high capacity and reasonable bandwidth. SRAM is present but small relative to total memory. Works well for large models, large batch sizes, and workloads where capacity matters more than latency.
 
-**The conversation you can now have:** "The operations where SRAM-resident compute shines are the ones with high data reuse — attention, dense transformer layers. The ops where HBM bandwidth still wins are memory-bound scatter/gather patterns. Here's how I think about your workload mix against that tradeoff..."
+**The SRAM-heavy approach** (seen in dataflow architectures like Tenstorrent's Tensix, and in the scratchpad designs of other custom accelerators): More SRAM per compute unit, smaller or no HBM. The bet is that for inference-dominated workloads with high data reuse — transformer layers, attention — keeping data on-chip eliminates the 100× latency penalty of going off-chip entirely. Wins on efficiency and latency for workloads that fit. Loses on capacity for workloads that don't.
+
+**The in-memory compute approach** (seen in designs like d-Matrix): Move computation closer to where data is stored, rather than moving data to computation. Directly attacks the bandwidth wall by reducing the distance data travels.
+
+**The deterministic latency approach** (seen in Groq's LPU): Eliminate the memory hierarchy variability entirely. Predictable execution time on every token, every time. Trades peak throughput flexibility for latency guarantees.
+
+Understanding where a workload sits on the roofline — and how much data reuse it has — is the starting point for reasoning about which architectural approach fits it best. A workload that is heavily memory-bound with high data reuse is a candidate for SRAM-heavy designs. A workload requiring large model capacity with variable batch sizes favors HBM-centric designs.
 
 ---
 
-*Phase 1 complete. Phase 2 builds on this with hand-written CUDA kernels — naive matmul then tiled matmul — and you'll directly observe the speedup from explicit SRAM staging.*
+*Phase 1 complete. Phase 2 builds on this with hand-written CUDA kernels — naive matmul then tiled matmul — directly observing the speedup from explicit SRAM staging.*
