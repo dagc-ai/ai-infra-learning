@@ -1,20 +1,18 @@
 # AI Infrastructure: Kernel to Deployment
 
-A hands-on technical curriculum built to develop genuine credibility at the layer of the stack where almost no enterprise GTM candidate operates — GPU architecture, CUDA kernel programming, distributed training primitives, and alternative hardware stacks.
+A hands-on technical curriculum working through the AI compute stack from the ground up — GPU architecture, CUDA kernel programming, distributed training primitives, and alternative hardware.
 
-This is not a reading list. Every phase produces running code, real benchmark numbers, and a publishable artifact.
+This is not a reading list. Every phase produces running code, real benchmark numbers, and a written artifact.
 
 ---
 
 ## Background
 
-EE undergrad (Texas A&M) + enterprise infrastructure sales background. The goal is to build the technical depth required to sell at the silicon layer — AI chip vendors, GPU cloud, AI networking — where the gap between "knows the vocabulary" and "has run the code" is immediately visible to a technical buyer.
-
-Primary targets: Tenstorrent, Cerebras, Groq, SambaNova, CoreWeave, Lambda Labs, Arista (AI networking).
+EE undergrad (Texas A&M) + enterprise infrastructure sales background. Learning in public. The goal is to build genuine depth at the systems layer — not just vocabulary, but code that runs and numbers that mean something.
 
 ---
 
-## What's Here
+## Progress
 
 | Phase | Topic | Status | Key Result |
 |-------|-------|--------|------------|
@@ -43,10 +41,8 @@ Primary targets: Tenstorrent, Cerebras, Groq, SambaNova, CoreWeave, Lambda Labs,
 
 **Artifacts:**
 - [`phase1-gpu-architecture/bandwidth_vs_compute.py`](phase1-gpu-architecture/bandwidth_vs_compute.py) — roofline benchmark
-- [`notes/gpu-architecture-primer.md`](notes/gpu-architecture-primer.md) — architecture notes written for a technical sales audience
+- [`notes/gpu-architecture-primer.md`](notes/gpu-architecture-primer.md) — architecture notes
 - [`notes/roofline_model_rtx4090.html`](notes/roofline_model_rtx4090.html) — interactive roofline chart with real benchmark data
-
-**GTM takeaway:** Batch size 1 inference is almost always memory-bound regardless of chip TFLOPS. The optimization levers are bandwidth, quantization (fewer bytes to move), and kernel fusion (data reuse). This is the conversation that separates a hardware sales rep who knows the spec sheet from one who understands the workload.
 
 ---
 
@@ -68,10 +64,8 @@ git clone https://github.com/dagc-ai/ai-infra-learning.git
 
 ## Notes
 
-Technical write-ups designed for a customer or hiring manager conversation, not an academic audience:
-
 - [`notes/gpu-architecture-primer.md`](notes/gpu-architecture-primer.md) — GPU execution model, memory hierarchy, roofline model, SRAM vs HBM tradeoffs
 
 ---
 
-*Curriculum based on a 24-week learning plan covering Layers 3–5 of the AI infrastructure stack. Updated as phases complete.*
+*24-week curriculum covering the AI infrastructure stack from kernel programming to deployment. Updated as phases complete.*
