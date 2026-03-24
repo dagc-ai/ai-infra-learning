@@ -1,0 +1,513 @@
+==PROF== Connected to process 7180 (/root/ai-infra-learning/phase2-cuda-kernels/benchmark_matmul)
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+==PROF== Profiling "naiveMatMul": 0%....50%....100% - 7 passes
+
+N       Naive(ms)  Naive(TFLOPS)  Tiled(ms)  Tiled(TFLOPS)  cuBLAS(ms) cuBLAS(TFLOPS)
+------------------------------------------------------------------------
+1024    116.82     0.02          0.31       6.95          0.05       40.92       
+2048    140.14     0.12          2.61       6.57          0.32       53.70       
+4096    skipped    skipped       19.21      7.15          2.53       54.34       
+==PROF== Disconnected from process 7180
+[7180] benchmark_matmul@127.0.0.1
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.28
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.21
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.32
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.04
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.09
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.10
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.01
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.23
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        96.98
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.23
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.10
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        96.97
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.72
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.01
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.30
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.26
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.21
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.22
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.24
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        96.95
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.71
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        96.99
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (64, 64, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         1.70
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte         4.29
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        97.19
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.05
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.07
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.07
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.07
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.05
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.06
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.09
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.10
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.11
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.06
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.11
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.09
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.09
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.10
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.11
+    ------------------------------------------------------ ----------- ------------
+
+  naiveMatMul(float *, float *, float *, int) (128, 128, 1)x(16, 16, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------------------------------ ----------- ------------
+    Metric Name                                            Metric Unit Metric Value
+    ------------------------------------------------------ ----------- ------------
+    gpu__dram_throughput.avg.pct_of_peak_sustained_elapsed           %         0.88
+    l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum                          0
+    l1tex__t_bytes_pipe_lsu_mem_global_op_ld.sum                 Gbyte        34.36
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                 %        99.08
+    ------------------------------------------------------ ----------- ------------
+
