@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roofline Model — RTX 4090</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #fff; color: #111; padding: 2rem; max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 1.5rem; }
+  .metric-grid { display: flex; gap: 12px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .metric-card { background: #f5f5f3; border-radius: 8px; padding: 1rem; flex: 1; min-width: 120px; }
+  .metric-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .metric-value { font-size: 20px; font-weight: 500; }
+  .metric-sub { font-size: 11px; color: #888; }
+  .chart-wrap { position: relative; width: 100%; height: 380px; }
+  .legend { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #666; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .line { width: 24px; height: 2px; }
+  .dashed { border-top: 2px dashed #888780; width: 24px; height: 0; }
+  .ncu-section { margin-top: 1.5rem; border-top: 1px solid #e5e5e5; padding-top: 1rem; }
+  .ncu-label { font-size: 13px; color: #666; margin-bottom: 8px; }
+  .ncu-grid { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ncu-card { background: #f5f5f3; border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 140px; }
+  .ncu-title { font-size: 11px; color: #666; }
+  .bar-row { display: flex; gap: 8px; margin-top: 6px; }
+  .bar-col { flex: 1; }
+  .bar-name { font-size: 10px; color: #888; margin-bottom: 2px; }
+  .bar-track { height: 6px; background: #e5e5e5; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-pct { font-size: 11px; font-weight: 500; margin-top: 2px; }
+</style>
+</head>
+<body>
+<h1>Roofline model — RTX 4090</h1>
+<div class="subtitle">Phase 1 benchmark results · ai-infra-learning · github.com/dagc-ai/ai-infra-learning</div>
+<div class="metric-grid">
+  <div class="metric-card">
+    <div class="metric-label">peak compute</div>
+    <div class="metric-value">330 TFLOPS</div>
+    <div class="metric-sub">FP16 tensor cores</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">peak bandwidth</div>
+    <div class="metric-value">1008 GB/s</div>
+    <div class="metric-sub">GDDR6X</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-label">ridge point</div>
+    <div class="metric-value">~327 FLOP/B</div>
+    <div class="metric-sub">compute / bandwidth</div>
+  </div>
+</div>
+<div class="chart-wrap">
+  <canvas id="rooflineChart"></canvas>
+</div>
+<div class="legend">
+  <span><span class="dot" style="background:#3266ad;"></span>measured kernels</span>
+  <span><span class="line" style="background:#E24B4A;"></span>memory bandwidth ceiling</span>
+  <span><span class="line" style="background:#1D9E75;"></span>compute ceiling</span>
+  <span><span class="dashed"></span>ridge point</span>
+</div>
+<div class="ncu-section">
+  <div class="ncu-label">ncu hardware counter confirmation</div>
+  <div class="ncu-grid">
+    <div class="ncu-card">
+      <div class="ncu-title">elementwise multiply (a * b)</div>
+      <div class="bar-row">
+        <div class="bar-col">
+          <div class="bar-name">DRAM throughput</div>
+          <div class="bar-track"><div class="bar-fill" style="width:92%;background:#E24B4A;"></div></div>
+          <div class="bar-pct" style="color:#E24B4A;">92%</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-name">SM compute</div>
+          <div class="bar-track"><div class="bar-fill" style="width:2.6%;background:#1D9E75;"></div></div>
+          <div class="bar-pct" style="color:#1D9E75;">2.6%</div>
+        </div>
+      </div>
+    </div>
+    <div class="ncu-card">
+      <div class="ncu-title">FP16 matmul N=2048</div>
+      <div class="bar-row">
+        <div class="bar-col">
+          <div class="bar-name">DRAM throughput</div>
+          <div class="bar-track"><div class="bar-fill" style="width:13%;background:#E24B4A;"></div></div>
+          <div class="bar-pct" style="color:#E24B4A;">13%</div>
+        </div>
+        <div class="bar-col">
+          <div class="bar-name">SM compute</div>
+          <div class="bar-track"><div class="bar-fill" style="width:47%;background:#1D9E75;"></div></div>
+          <div class="bar-pct" style="color:#1D9E75;">47%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const peakBW = 1008, peakCompute = 330000;
+const ridgePoint = peakCompute / peakBW;
+const xMin = 0.05, xMax = 10000;
+const logMin = Math.log10(xMin), logMax = Math.log10(xMax);
+function rooflineY(x) { return Math.min(peakBW * x, peakCompute); }
+const nPoints = 200, rooflineX = [], rooflineY2 = [];
+for (let i = 0; i <= nPoints; i++) {
+  const x = Math.pow(10, logMin + (logMax - logMin) * i / nPoints);
+  rooflineX.push(x); rooflineY2.push(rooflineY(x));
+}
+const scatterData = [
+  { x: 0.083, y: (947.5*0.083)/1000, color: '#E24B4A' },
+  { x: 683,   y: 158.1,              color: '#1D9E75' },
+  { x: 85.3,  y: (85.3*peakBW*0.4)/1000, color: '#BA7517' },
+  { x: 21.3,  y: (peakBW*21.3*0.85)/1000, color: '#E24B4A' },
+];
+new Chart(document.getElementById('rooflineChart'), {
+  type: 'scatter',
+  data: { datasets: [
+    { data: rooflineX.map((x,i) => ({ x, y: rooflineY2[i]/1000 })), type: 'line', borderColor: '#888', borderWidth: 2.5, pointRadius: 0, fill: false, tension: 0, order: 2 },
+    { data: [{ x: ridgePoint, y: 0.1 },{ x: ridgePoint, y: peakCompute/1000 }], type: 'line', borderColor: '#888780', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0, fill: false, order: 3 },
+    { data: scatterData, type: 'scatter', pointRadius: 7, backgroundColor: scatterData.map(d=>d.color), borderColor: 'rgba(255,255,255,0.8)', borderWidth: 1.5, order: 1 }
+  ]},
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => [`intensity: ${ctx.raw.x.toFixed(1)} FLOP/byte`, `perf: ${ctx.raw.y.toFixed(1)} TFLOPS`] }}},
+    scales: {
+      x: { type: 'logarithmic', min: xMin, max: xMax, title: { display: true, text: 'arithmetic intensity (FLOP / byte)', color: '#888', font: { size: 12 }}, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#888', font: { size: 11 }, callback: v => [0.1,1,10,100,1000].includes(v)?v:'' }},
+      y: { type: 'logarithmic', min: 0.05, max: 500, title: { display: true, text: 'performance (TFLOPS)', color: '#888', font: { size: 12 }}, grid: { color: 'rgba(0,0,0,0.06)' }, ticks: { color: '#888', font: { size: 11 }, callback: v => [0.1,1,10,100,330].includes(v)?v:'' }}
+    }
+  },
+  plugins: [{ afterDraw(chart) {
+    const { ctx, scales: { x, y }, chartArea } = chart;
+    ctx.save();
+    const ridgePx = x.getPixelForValue(ridgePoint);
+    ctx.fillStyle = 'rgba(226,75,74,0.07)';
+    ctx.fillRect(chartArea.left, chartArea.top, ridgePx-chartArea.left, chartArea.bottom-chartArea.top);
+    ctx.fillStyle = 'rgba(29,158,117,0.06)';
+    ctx.fillRect(ridgePx, chartArea.top, chartArea.right-ridgePx, chartArea.bottom-chartArea.top);
+    const labels = [
+      { xi:0.083, yi:(947.5*0.083)/1000, text:'elementwise x', dx:8,   dy:-14, color:'#E24B4A' },
+      { xi:683,   yi:158.1,              text:'matmul N=8192', dx:-100, dy:-14, color:'#1D9E75' },
+      { xi:85.3,  yi:(85.3*peakBW*0.4)/1000, text:'N=256 (flip)', dx:8, dy:16, color:'#BA7517' },
+      { xi:21.3,  yi:(peakBW*21.3*0.85)/1000, text:'N=64',        dx:8, dy:-14, color:'#E24B4A' },
+    ];
+    labels.forEach(k => {
+      const px = x.getPixelForValue(k.xi), py = y.getPixelForValue(k.yi);
+      if (px < chartArea.left || px > chartArea.right) return;
+      ctx.fillStyle = k.color; ctx.font = '500 11px system-ui, sans-serif';
+      ctx.fillText(k.text, px+k.dx, py+k.dy);
+    });
+    ctx.fillStyle='#888'; ctx.font='11px system-ui, sans-serif';
+    ctx.fillText('ridge ~327', ridgePx+4, chartArea.top+14);
+    ctx.font='500 12px system-ui, sans-serif';
+    ctx.fillStyle='rgba(180,40,40,0.5)'; ctx.fillText('memory-bound', chartArea.left+8, chartArea.bottom-12);
+    ctx.fillStyle='rgba(15,110,86,0.5)'; ctx.fillText('compute-bound', ridgePx+8, chartArea.bottom-12);
+    ctx.restore();
+  }}]
+});
+</script>
+</body>
+</html>
