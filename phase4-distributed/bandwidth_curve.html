@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NVLink Bandwidth Benchmark — Phase 4</title>
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; background: #fff; color: #222; }
+  h2 { font-weight: 500; font-size: 20px; margin-bottom: 0.25rem; }
+  p.sub { font-size: 13px; color: #666; margin-top: 0; }
+  .cards { display: flex; gap: 12px; margin-bottom: 1.5rem; }
+  .card { flex: 1; background: #f5f5f3; border-radius: 8px; padding: 1rem; }
+  .card .label { font-size: 13px; color: #666; margin: 0 0 4px; }
+  .card .value { font-size: 24px; font-weight: 500; margin: 0; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #666; margin-bottom: 8px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .swatch-line { width: 10px; height: 3px; display: inline-block; }
+  .note { font-size: 12px; color: #888; margin-top: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 1.5rem; }
+  th { text-align: left; font-weight: 500; padding: 8px 12px; border-bottom: 1px solid #eee; color: #444; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+  tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+
+<h2>NVLink AllReduce bandwidth — 4× A100 SXM</h2>
+<p class="sub">Exercise 4.3 · Phase 4 · Measured on RunPod 4× A100 SXM (NV12) · PyTorch 2.4.0 · CUDA 12.4.1</p>
+
+<div class="cards">
+  <div class="card"><p class="label">peak measured</p><p class="value">228 GB/s</p></div>
+  <div class="card"><p class="label">nvlink spec</p><p class="value">600 GB/s</p></div>
+  <div class="card"><p class="label">% of peak at 2GB</p><p class="value">37.9%</p></div>
+</div>
+
+<div class="legend">
+  <span><span class="swatch" style="background:#378ADD;"></span>Measured BW (GB/s)</span>
+  <span><span class="swatch-line" style="background:#D85A30;"></span>NVLink spec 600 GB/s</span>
+</div>
+
+<div style="position: relative; width: 100%; height: 300px;">
+  <canvas id="bwChart"></canvas>
+</div>
+
+<p class="note">Latency-dominated at small sizes → bandwidth-saturated at large sizes. Curve still rising at 2GB — fixed NCCL overhead not yet negligible. Gap vs. spec explained by RunPod virtualization overhead and AllReduce synchronization cost vs. raw point-to-point NVLink throughput.</p>
+
+<table>
+  <tr><th>Size</th><th>Time (ms)</th><th>BW (GB/s)</th><th>% of Peak</th></tr>
+  <tr><td>1 MB</td><td>0.051</td><td>31.0</td><td>5.2%</td></tr>
+  <tr><td>16 MB</td><td>0.202</td><td>124.3</td><td>20.7%</td></tr>
+  <tr><td>64 MB</td><td>0.596</td><td>168.8</td><td>28.1%</td></tr>
+  <tr><td>256 MB</td><td>2.092</td><td>192.5</td><td>32.1%</td></tr>
+  <tr><td>512 MB</td><td>3.817</td><td>211.0</td><td>35.2%</td></tr>
+  <tr><td>1 GB</td><td>7.244</td><td>222.3</td><td>37.1%</td></tr>
+  <tr><td>2 GB</td><td>14.152</td><td>227.6</td><td>37.9%</td></tr>
+</table>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const labels = ['1 MB','16 MB','64 MB','256 MB','512 MB','1 GB','2 GB'];
+const measured = [31.0, 124.3, 168.8, 192.5, 211.0, 222.3, 227.6];
+const specLine = [600, 600, 600, 600, 600, 600, 600];
+new Chart(document.getElementById('bwChart'), {
+  data: {
+    labels,
+    datasets: [
+      { type: 'bar', label: 'Measured BW', data: measured, backgroundColor: '#85B7EB', borderColor: '#378ADD', borderWidth: 1, borderRadius: 4, yAxisID: 'y' },
+      { type: 'line', label: 'NVLink spec', data: specLine, borderColor: '#D85A30', borderWidth: 2, borderDash: [6,4], pointRadius: 0, fill: false, yAxisID: 'y' }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { callbacks: { label: ctx => ctx.datasetIndex === 0 ? ` ${ctx.raw} GB/s (${((ctx.raw/600)*100).toFixed(1)}% of peak)` : ` ${ctx.raw} GB/s (spec)` } }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#888', font: { size: 12 }, autoSkip: false } },
+      y: { min: 0, max: 650, grid: { color: 'rgba(128,128,128,0.1)' }, ticks: { color: '#888', font: { size: 12 }, callback: v => v + ' GB/s' } }
+    }
+  }
+});
+</script>
+</body>
+</html>
