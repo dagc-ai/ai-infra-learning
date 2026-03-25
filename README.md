@@ -1,14 +1,10 @@
-# AI Infrastructure: Kernel to Deployment
+# AI Infrastructure Learning Journey
 
-A hands-on technical curriculum working through the AI compute stack from the ground up — GPU architecture, CUDA kernel programming, distributed training primitives, and alternative hardware.
+A bottom-up, hands-on journey through the full AI compute stack — from GPU
+architecture and kernel programming to distributed training and inference serving.
 
-This is not a reading list. Every phase produces running code, real benchmark numbers, and a written artifact.
-
----
-
-## Background
-
-EE undergrad (Texas A&M) + enterprise infrastructure sales background. Learning in public. The goal is to build genuine depth at the systems layer — not just vocabulary, but code that runs and numbers that mean something.
+Every concept has an exercise. Every exercise produces a number. Every number
+is committed here.
 
 ---
 
@@ -16,56 +12,56 @@ EE undergrad (Texas A&M) + enterprise infrastructure sales background. Learning 
 
 | Phase | Topic | Status | Key Result |
 |-------|-------|--------|------------|
-| 1 | GPU Architecture & Memory Hierarchy | ✅ Complete | 947 GB/s measured BW (94% peak); roofline flip at N=256 |
-| 2 | CUDA Kernel Programming | 🔄 In progress | — |
-| 3 | Triton — Python-Level Kernel Writing | ⬜ Planned | — |
-| 4 | Distributed Training Primitives | ⬜ Planned | — |
-| 5 | Inference & Serving Infrastructure | ⬜ Planned | — |
-| 6 | Alternative Hardware Stacks | ⬜ Planned | — |
+| 0 | Environment & Tooling | ✅ Complete | GPU instance, repo, nvitop |
+| 1 | GPU Architecture & Memory Hierarchy | ✅ Complete | Roofline model, memory-bound vs compute-bound |
+| 2 | CUDA Kernel Programming | ✅ Complete | Tiled matmul 7 TFLOPS, cuBLAS 54 TFLOPS, warp shuffle softmax |
+| 3 | Triton Kernel Programming | ✅ Complete | 92% peak bandwidth, 2x fusion win, Flash Attention 6.4x at N=4096 |
+| 4 | Distributed Training Primitives | 🔜 Next | DDP, Ring AllReduce, interconnect benchmarking |
+| 5 | Inference & Serving Infrastructure | ⬜ Pending | vLLM, quantization, KV cache |
+| 6 | Alternative Hardware Architectures | ⬜ Pending | Tenstorrent, AMD ROCm, TPU concepts |
+| 7 | Model Architecture & Full Stack View | ⬜ Pending | Transformer from scratch, scaling laws |
 
 ---
 
-## Phase 1 — GPU Architecture & Memory Hierarchy
+## Phase 3 Results — Triton Kernel Programming
 
-**Core result:** Validated the roofline model experimentally on an RTX 4090.
+### Exercise 3.1 — Vector Addition
+- Triton kernel matches PyTorch hand-tuned CUDA at 92% of peak GDDR6X bandwidth
+- 924 GB/s achieved vs 1,008 GB/s theoretical peak on RTX 4090
+- Key insight: Triton's block-level programming model lets the compiler guarantee
+  memory coalescing — no manual thread indexing required
 
-| Operation | Arithmetic Intensity | Achieved | Regime |
-|-----------|---------------------|----------|--------|
-| Element-wise multiply (FP32, 32M elements) | 0.083 FLOP/byte | 947.5 GB/s (94% of peak BW) | memory-bound |
-| FP16 matmul N=8192 | 2731 FLOP/byte | 158.1 TFLOPS (48% of peak compute) | compute-bound |
-| FP16 matmul N=256 | 85.3 FLOP/byte | — | ridge point (flip) |
+### Exercise 3.2 — Fused Softmax
+- Fused kernel: 1 HBM round trip. Unfused: 5 HBM round trips.
+- 2x throughput advantage at practical sizes (1024 rows × 2048 cols)
+- Key insight: fusion eliminates intermediate writes to HBM — the only
+  way to win on memory-bandwidth-bound operations
 
-**ncu hardware counter confirmation:**
-- `vectorized_elementwise_kernel`: DRAM 92%, SM compute 2.6% → memory-bound confirmed
-- `ampere_fp16_s16816gemm`: DRAM 13%, SM compute 47% → compute-bound confirmed
+### Exercise 3.3 — Flash Attention Forward Pass
+- Implemented online softmax tiling from scratch
+- O(N) memory complexity vs O(N²) for naive attention — confirmed empirically
 
-**Artifacts:**
-- [`phase1-gpu-architecture/bandwidth_vs_compute.py`](phase1-gpu-architecture/bandwidth_vs_compute.py) — roofline benchmark
-- [`notes/gpu-architecture-primer.md`](notes/gpu-architecture-primer.md) — architecture notes
-- [`notes/roofline_model_rtx4090.html`](notes/roofline_model_rtx4090.html) — interactive roofline chart with real benchmark data
+| N    | Flash    | Naive    | Speedup | Naive attn matrix |
+|------|----------|----------|---------|-------------------|
+| 512  | 0.041ms  | 0.072ms  | 1.8x    | 8.4 MB            |
+| 1024 | 0.044ms  | 0.176ms  | 4.0x    | 33.6 MB           |
+| 2048 | 0.155ms  | 0.969ms  | 6.3x    | 134.2 MB          |
+| 4096 | 0.590ms  | 3.750ms  | 6.4x    | 536.9 MB          |
 
----
-
-## Setup
-```bash
-# Rent a VM instance (not Docker) on vast.ai for ncu hardware counter access
-# RTX 4090, Ubuntu 22.04 VM, ~$0.40/hr
-
-nvidia-smi
-ncu --query-metrics 2>&1 | head -5  # confirms hardware counter access
-
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-pip install nvtx numpy
-
-git clone https://github.com/dagc-ai/ai-infra-learning.git
-```
+- Key insight: Flash Attention doesn't just make long context faster —
+  at sufficient N it makes it possible at all. The algorithm unlocked
+  the hardware market for long-context inference, not the other way around.
 
 ---
 
 ## Notes
 
-- [`notes/gpu-architecture-primer.md`](notes/gpu-architecture-primer.md) — GPU execution model, memory hierarchy, roofline model, SRAM vs HBM tradeoffs
+- [GPU Architecture Primer](notes/gpu-architecture-primer.md)
+- [Flash Attention Explained](notes/flash-attention-explained.md)
 
 ---
 
-*24-week curriculum covering the AI infrastructure stack from kernel programming to deployment. Updated as phases complete.*
+## Hardware
+
+All Phase 1–3 benchmarks run on RTX 4090 (24GB GDDR6X, ~1,008 GB/s bandwidth)
+via RunPod cloud GPU instances.
