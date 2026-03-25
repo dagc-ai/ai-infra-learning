@@ -276,3 +276,64 @@ is the default attention path, not an optional flag.
 
 All RTX 4090 specs: 16,384 CUDA cores, 1,008 GB/s GDDR6X bandwidth, 82.6 TFLOPS FP32,
 330 TFLOPS FP16 tensor core peak.
+
+## Phase 4 — Distributed Training Primitives
+
+**Hardware:** 4× A100 SXM 40GB, NVLink NV12 topology, CUDA 12.4.1, PyTorch 2.4.0, RunPod
+
+### Key Results
+
+**Exercise 4.1 — DDP Training**
+
+- 4-process DDP training loop across 4× A100 SXM
+- Initial param sum: `20.335490` — identical across all 4 ranks (broadcast at init confirmed)
+- Final param sum: `20.307633` — identical across all 4 ranks after 20 steps on different random data (AllReduce confirmed working)
+- Step timing: 0.21s (rank 0) to 0.26s (rank 3) — variance demonstrates the synchronization barrier in practice: fastest rank waits for slowest before any rank proceeds
+
+**Exercise 4.2 — Ring AllReduce from Scratch**
+
+- Implemented full Ring AllReduce using only `dist.P2POp` point-to-point primitives — no `dist.all_reduce()`
+- Result matched PyTorch `dist.all_reduce()` to `9.54e-07` max absolute difference across all 4 ranks
+- Hit deadlock on first implementation using naive `isend` + `recv` — all ranks blocked simultaneously because NCCL `isend` doesn't move data until a matching `recv` is posted on the remote end
+- Fixed with `dist.batch_isend_irecv`, which posts sends and receives atomically
+
+**Exercise 4.3 — NVLink Bandwidth Benchmark**
+
+| Tensor size | Time (ms) | Measured BW | % of 600 GB/s spec |
+|-------------|-----------|-------------|---------------------|
+| 1 MB | 0.051 | 31.0 GB/s | 5.2% |
+| 16 MB | 0.202 | 124.3 GB/s | 20.7% |
+| 64 MB | 0.596 | 168.8 GB/s | 28.1% |
+| 256 MB | 2.092 | 192.5 GB/s | 32.1% |
+| 512 MB | 3.817 | 211.0 GB/s | 35.2% |
+| 1 GB | 7.244 | 222.3 GB/s | 37.1% |
+| 2 GB | 14.152 | 227.6 GB/s | 37.9% |
+
+Peak measured: 228 GB/s — 38% of 600 GB/s A100 SXM NVLink spec. Curve still rising at
+2GB. Gap vs. spec attributed to RunPod virtualization overhead, AllReduce synchronization
+cost, and NCCL algorithm overhead vs. raw point-to-point benchmark conditions. Bus
+bandwidth formula: `2 × (N-1)/N × tensor_size / time` — matches NCCL benchmark
+methodology.
+
+### What This Means
+
+When training across multiple GPUs, each GPU sees different data and computes its own
+gradient. Before any weight update can happen, all gradients must be averaged across
+every GPU so the model stays synchronized. That averaging — AllReduce — runs over the
+physical wire connecting GPUs on every single training step. We implemented that
+algorithm from scratch, proved it produces the correct result, then measured how fast
+the wire actually runs versus its rated spec. The gap between 228 GB/s measured and
+600 GB/s rated is not a malfunction — it's what real-world overhead looks like.
+Understanding that gap is what separates people who read spec sheets from people who
+understand systems.
+
+### Key Insight
+
+Interconnect topology is a first-class architectural decision, not a procurement
+detail. PCIe between GPUs delivers ~32 GB/s per link; NVLink delivers 600 GB/s. At
+real gradient tensor sizes, PCIe puts you in a regime where communication dominates
+compute — and that is not fixable in software. GPU utilization is also the wrong
+metric for distributed training: a cluster showing 80% utilization may be spending
+40% of that time blocked at AllReduce barriers. The correct metric is Model FLOP
+Utilization (MFU). Most production training runs achieve 30–50% MFU. NVLink is
+NVIDIA's most durable competitive moat — more defensible than the GPU itself.
