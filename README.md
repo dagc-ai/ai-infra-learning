@@ -16,8 +16,8 @@ is committed here.
 | 1 | GPU Architecture & Memory Hierarchy | ✅ Complete | Roofline model measured: 947 GB/s bandwidth, 158 TFLOPS compute, ridge at ~327 FLOP/byte |
 | 2 | CUDA Kernel Programming | ✅ Complete | Tiled matmul 7.2 TFLOPS vs cuBLAS 54 TFLOPS; 8x HBM traffic reduction confirmed via ncu |
 | 3 | Triton Kernel Programming | ✅ Complete | 92% peak bandwidth, 2x fusion win, Flash Attention 6.4x speedup at N=4096 |
-| 4 | Distributed Training Primitives | 🔜 Next | DDP, Ring AllReduce, interconnect benchmarking |
-| 5 | Inference & Serving Infrastructure | ⬜ Pending | vLLM, quantization, KV cache |
+| 4 | Distributed Training Primitives | ✅ Complete | DDP, Ring AllReduce, interconnect benchmarking |
+| 5 | Inference & Serving Infrastructure | 🔜 Next | vLLM, quantization, KV cache |
 | 6 | Alternative Hardware Architectures | ⬜ Pending | Tenstorrent, AMD ROCm, TPU concepts |
 | 7 | Model Architecture & Full Stack View | ⬜ Pending | Transformer from scratch, scaling laws |
 
