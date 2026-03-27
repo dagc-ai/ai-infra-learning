@@ -17,8 +17,8 @@ is committed here.
 | 2 | CUDA Kernel Programming | ✅ Complete | Tiled matmul 7.2 TFLOPS vs cuBLAS 54 TFLOPS; 8x HBM traffic reduction confirmed via ncu |
 | 3 | Triton Kernel Programming | ✅ Complete | 92% peak bandwidth, 2x fusion win, Flash Attention 6.4x speedup at N=4096 |
 | 4 | Distributed Training Primitives | ✅ Complete | 228 GB/s measured vs 600 GB/s NVLink spec; Ring AllReduce from scratch; 38% of spec in virtualized env |
-| 5 | Inference & Serving Infrastructure | 🔜 Next | vLLM, quantization, KV cache |
-| 6 | Alternative Hardware Architectures | ⬜ Pending | Tenstorrent, AMD ROCm, TPU concepts |
+| 5 | Inference & Serving Infrastructure | ✅ Complete | AWQ Marlin 218.9 tok/s (2.27x BF16); 8x concurrency = 8x throughput flat latency; one flag = 10x perf delta |
+| 6 | Alternative Hardware Architectures | 🔜 Next | Tenstorrent, AMD ROCm, TPU concepts |
 | 7 | Model Architecture & Full Stack View | ⬜ Pending | Transformer from scratch, scaling laws |
 
 ---
@@ -340,184 +340,107 @@ NVIDIA's most durable competitive moat — more defensible than the GPU itself.
 
 ## Phase 5 — Inference & Serving Infrastructure
 
-**Hardware:** NVIDIA A100 SXM4 80GB (RunPod), CUDA 12.4, PyTorch 2.4.0, vLLM 0.18.0  
-**Model:** Mistral-7B-Instruct-v0.3 (BF16) and Mistral-7B-Instruct-v0.2-AWQ (INT4)  
-**Scripts:** `phase5-inference/benchmark_vllm.py`, `phase5-inference/benchmark_concurrent.py`
+**Hardware:** A100 SXM4 80GB, CUDA 12.4, PyTorch 2.4.0, vLLM 0.18.0, RunPod  
+**Model:** Mistral-7B-Instruct-v0.3 (BF16) and Mistral-7B-Instruct-v0.2-AWQ (INT4)
 
----
-
-### Key Findings (Proof of Execution)
+### Key Results
 
 **Exercise 5.1 — vLLM Deployment & Continuous Batching**
 
-Deployed Mistral 7B BF16 via vLLM 0.18.0. Measured single-request baseline and
-concurrent request scaling on a single A100 SXM 80GB.
+vLLM startup telemetry (Mistral 7B BF16):
 
-vLLM startup telemetry:
-- Model loaded: 13.51 GiB in 5.5 seconds
-- KV cache pool allocated: 57.41 GiB (90% GPU memory utilization)
-- KV cache capacity: 470,288 tokens total
-- Max concurrency at 8,192 token context: 57x
+| Metric | Value |
+|--------|-------|
+| Model loaded | 13.51 GiB in 5.5 seconds |
+| KV cache pool allocated | 57.41 GiB (90% GPU memory utilization) |
+| KV cache capacity | 470,288 tokens total |
+| Max concurrency at 8,192 token context | 57x |
 
 Single request baseline:
-- Prompt tokens: 13
-- Completion tokens: 200
-- Total time: 2,073ms
-- Throughput: 96.5 tok/s
-- Implied HBM bandwidth utilization: ~1.4 TB/s (~70% of A100 peak 2.0 TB/s)
 
-Concurrent request benchmark (benchmark_concurrent.py):
-```
-Concurrency  1 |  94.7 tok/s | 2110ms latency
-Concurrency  2 | 193.0 tok/s | 2066ms latency
-Concurrency  4 | 382.7 tok/s | 2083ms latency
-Concurrency  8 | 752.3 tok/s | 2110ms latency
-```
-8x requests produced 8x throughput with flat latency across all concurrency levels.
+| Metric | Value |
+|--------|-------|
+| Prompt tokens | 13 |
+| Completion tokens | 200 |
+| Total time | 2,073ms |
+| Throughput | 96.5 tok/s |
+| Implied HBM bandwidth utilization | ~1.4 TB/s (~70% of A100 2.0 TB/s peak) |
+
+Concurrent request scaling:
+
+| Concurrency | Throughput | Latency |
+|-------------|------------|---------|
+| 1 | 94.7 tok/s | 2,110ms |
+| 2 | 193.0 tok/s | 2,066ms |
+| 4 | 382.7 tok/s | 2,083ms |
+| 8 | 752.3 tok/s | 2,110ms |
+
+8x requests produced 8x throughput with flat latency — continuous batching
+absorbing concurrent load without queuing penalty.
 
 **Exercise 5.2 — Quantization Benchmarks**
 
-Downloaded Mistral-7B-Instruct-v0.2-AWQ (4.15 GiB vs 14.5 GiB for BF16).
-Ran three configurations using the same benchmark script and same prompt.
-```
-Format           | Model Size  | Throughput   | vs BF16 | Kernel
------------------|-------------|--------------|---------|-------------
-BF16             | 13.51 GiB   |  96.5 tok/s  |  1.0x   | FlashAttn v2
-AWQ INT4 naive   |  3.88 GiB   |  20.9 tok/s  |  0.2x   | naive AWQ
-AWQ INT4 Marlin  |  3.88 GiB   | 218.9 tok/s  |  2.27x  | fused Marlin
-```
+| Format | Model size | Throughput | vs BF16 | Kernel |
+|--------|------------|------------|---------|--------|
+| BF16 | 13.51 GiB | 96.5 tok/s | 1.0x | FlashAttention v2 |
+| AWQ INT4 naive | 3.88 GiB | 20.9 tok/s | 0.2x | naive AWQ |
+| AWQ INT4 Marlin | 3.88 GiB | 218.9 tok/s | 2.27x | fused Marlin |
 
-AWQ Marlin startup telemetry:
-- KV cache available: 66.92 GiB (vs 57.41 GiB for BF16 — 9GB freed)
-- Max concurrency: 67x (vs 57x for BF16)
-
-Error encountered and resolved: initial AWQ run used `--quantization awq` instead
-of `--quantization awq_marlin`. vLLM warned at startup that Marlin was available
-but not selected. Result was 20.9 tok/s — 5x slower than BF16. Switching to
+Error encountered and documented: initial AWQ run used `--quantization awq` instead
+of `--quantization awq_marlin`. vLLM warned at startup that Marlin was available but
+not selected. Result was 20.9 tok/s — 5x slower than BF16. Switching to
 `--quantization awq_marlin` recovered full performance (218.9 tok/s). One flag,
 10x difference.
+
+AWQ Marlin memory impact: KV cache available 66.92 GiB vs 57.41 GiB for BF16 — 9GB
+freed by weight compression, increasing max concurrency from 57x to 67x.
 
 **Exercise 5.3 — Speculative Decoding**
 
 Draft model: nickypro/tinyllama-15M (30.4 MB, LLaMA architecture, Mistral-compatible
-tokenizer vocabulary). Target model: Mistral 7B AWQ Marlin.
-
-vLLM 0.18.0 deprecated `--speculative-model` flag. Correct syntax:
-```
---speculative-config '{"model": "/path/to/draft", "num_speculative_tokens": 5}'
-```
-
-Result: 67.5 tok/s — 3x slower than AWQ Marlin alone (218.9 tok/s), 30% slower
-than BF16 baseline (96.5 tok/s).
-
-Cause: TinyLlama shares Mistral's tokenizer vocabulary but was trained independently.
-Target model rejection rate was high — paid cost of both models with benefit of
-neither. vLLM also disabled async scheduling when speculative decoding is active,
-noted in startup log.
+tokenizer vocabulary). Target: Mistral 7B AWQ Marlin.
 
 Full configuration comparison:
-```
-Configuration                  | Throughput  | vs BF16
--------------------------------|-------------|--------
-BF16 baseline                  |  96.5 tok/s |  1.0x
-AWQ INT4 naive                 |  20.9 tok/s |  0.2x
-AWQ INT4 Marlin                | 218.9 tok/s |  2.27x
-AWQ Marlin + speculative (bad) |  67.5 tok/s |  0.7x
-```
 
-Note: speculative decoding with a correctly matched draft model (Mistral 1B/2B from
-the same training family) was not run — Mistral gated models require license approval
-that was pending at time of exercise. Bad-draft result is intentional and instructive.
+| Configuration | Throughput | vs BF16 |
+|---------------|------------|---------|
+| BF16 baseline | 96.5 tok/s | 1.0x |
+| AWQ INT4 naive | 20.9 tok/s | 0.2x |
+| AWQ INT4 Marlin | 218.9 tok/s | 2.27x |
+| AWQ Marlin + speculative (mismatched draft) | 67.5 tok/s | 0.7x |
 
----
+Result: 67.5 tok/s — 3x slower than AWQ Marlin alone, 30% slower than BF16 baseline.
+Cause: TinyLlama shares Mistral's tokenizer vocabulary but was trained independently.
+Target model rejection rate was high — paid the cost of running both models with the
+benefit of neither. Shared tokenizer vocabulary is necessary but not sufficient for
+speculative decoding. Training dynamics must also align.
 
-### What This Actually Means (Plain Language)
+Note: a correctly matched draft model (Mistral 1B/2B from the same training family)
+was not run — Mistral gated models required license approval pending at time of
+exercise. The mismatched-draft result is intentional and instructive.
+
+### What This Means
 
 Inference is not a compute problem — it is a memory problem. The A100 has 312 TFLOPS
 of compute sitting mostly idle during token generation. What limits speed is how fast
-the model's weights can be loaded from GPU memory (HBM) on every single decode step.
-Every optimization in this phase — batching, quantization, speculative decoding — is
-a different strategy for getting more useful work out of each memory access. The same
-principle that explains why tiled matrix multiply was faster than naive in Phase 2
-explains why AWQ Marlin is faster than naive AWQ here: minimize expensive data
-movement, maximize work per memory round trip.
+the model's weights can be loaded from HBM on every single decode step. Every
+optimization in this phase — batching, quantization, speculative decoding — is a
+different strategy for getting more useful work out of each memory access. The same
+principle that explained tiled matmul in Phase 2 and Flash Attention in Phase 3
+applies here: minimize expensive data movement, maximize work per memory round trip.
 
 The non-obvious finding: optimization method and optimization implementation are
 different things. AWQ INT4 with the wrong kernel was 5x slower than BF16. AWQ INT4
-with the right kernel was 2.27x faster. Same weights, same precision, one flag
-difference. Speculative decoding with the wrong draft model was 3x slower than no
-speculative decoding. The technique is not the result — the implementation is.
+with the right kernel was 2.27x faster. Same weights, same precision, one flag.
+Speculative decoding with the wrong draft model was 3x slower than no speculative
+decoding. The technique is not the result — the implementation is.
 
----
+### Key Insight
 
-### Implications for Technical Practitioners
-
-**For ML engineers and platform architects:**
-- Quantization decisions are memory budget decisions first, speed decisions second.
-  INT4 does not just make generation faster — it determines what models and context
-  lengths are possible within a fixed VRAM budget. A 70B model in BF16 requires
-  ~140GB. In INT4 it fits in ~35GB.
-- The optimization sequence matters: fix continuous batching first (free, 8x gain),
-  then quantization kernel (one flag, 10x difference), then quantization level
-  (2.27x), then speculative decoding (only helps with correct draft family at low
-  batch sizes). Skipping to speculative decoding without addressing the others is
-  a common mistake.
-- vLLM startup logs contain the full memory budget breakdown before any request is
-  served. Reading them tells you exactly how much VRAM went to weights vs KV cache
-  and what your max concurrency is at a given context length. This is the first
-  diagnostic step when evaluating a deployment.
-- Shared tokenizer vocabulary between draft and target model is necessary but not
-  sufficient for speculative decoding. Training dynamics must match. A LLaMA-family
-  draft model will not work for a Mistral-family target even with identical vocabulary.
-
-**For inference infrastructure engineers:**
-- AWQ Marlin on A100 achieved 218.9 tok/s single-request. At 8x concurrency with
-  continuous batching that extrapolates to ~1,750 tok/s — all on a single $1.49/hr
-  GPU. The hardware is not the bottleneck in most misconfigured deployments.
-- KV cache pool size directly determines concurrent user capacity. At 8,192 token
-  context on this A100: BF16 supports 57 concurrent requests, AWQ INT4 supports 67.
-  Quantization's memory benefit compounds at higher concurrency.
-
----
-
-### GTM / Business Implications
-
-**Questions a technical seller or buyer can now ask:**
-
-On quantization:
-- What precision are you running? (BF16, INT8, INT4)
-- What quantization kernel? (naive AWQ vs AWQ Marlin is a 10x throughput difference
-  on identical hardware and weights — most buyers do not know to ask this)
-- Who validated quality on your specific workload at that precision? Summarization
-  tolerates INT4 well. Legal and medical generation may not.
-
-On speculative decoding:
-- Are you using speculative decoding? If so, what is your draft model and is it from
-  the same training family as your target? (Shared vocabulary ≠ shared training
-  dynamics — running the wrong draft model produces results 30% worse than no
-  speculative decoding at all)
-- What is your measured draft acceptance rate? If the vendor cannot answer this,
-  they do not know if speculative decoding is helping or hurting.
-
-On inference infrastructure generally:
-- What is your GPU utilization between requests? (Near 0% at concurrency=1 is normal
-  and expected — the question is whether continuous batching is filling those gaps)
-- What is your cost per 1K tokens at your actual production concurrency level, not
-  your peak benchmark concurrency? (These are often very different numbers)
-
-**Vendor claims this knowledge lets you evaluate:**
-- "We use speculative decoding" — ask draft model family and acceptance rate.
-  Meaningless without both.
-- "We use INT4 quantization" — ask which kernel. Naive AWQ is slower than BF16.
-  AWQ Marlin is 2.27x faster. Same claim, opposite outcomes.
-- "You need more GPUs" — before accepting this, audit quantization kernel, batch
-  utilization, and continuous batching configuration. The gap between a misconfigured
-  and well-configured inference stack on identical hardware exceeded 10x in our
-  measured results.
-
-**The self-host vs managed API decision:**
-At roughly 5-10M tokens/day, self-hosting economics begin to dominate managed API
-pricing. Below that threshold, managed simplicity wins. Above it, the cost advantage
-of self-hosting is real — but only if the inference stack is correctly configured.
-A self-hosted deployment running naive AWQ at low batch utilization will cost more
-than a managed API at the same volume.
+The optimization sequence matters. Fix continuous batching first (free, 8x throughput
+gain at concurrency 8). Then quantization kernel (one flag, 10x difference). Then
+quantization level (2.27x gain). Then speculative decoding — and only with a draft
+model from the same training family as the target. A self-hosted deployment running
+naive AWQ at low batch utilization will cost more than a managed API at the same
+volume. The gap between a misconfigured and well-configured inference stack on
+identical hardware exceeded 10x in measured results.
