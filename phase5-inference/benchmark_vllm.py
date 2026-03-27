@@ -1,8 +1,9 @@
 import requests
 import time
+import sys
 
 url = "http://localhost:8000/v1/completions"
-model = "/workspace/models/Mistral-7B-Instruct-v0.3"
+model = sys.argv[1] if len(sys.argv) > 1 else "/workspace/models/Mistral-7B-Instruct-v0.3"
 prompt = "Explain how a transformer neural network works in detail:"
 
 # Warmup
@@ -22,6 +23,7 @@ data = resp.json()
 tokens = data["usage"]["completion_tokens"]
 prompt_tokens = data["usage"]["prompt_tokens"]
 
+print(f"Model:             {model}")
 print(f"Prompt tokens:     {prompt_tokens}")
 print(f"Completion tokens: {tokens}")
 print(f"Total time:        {elapsed*1000:.0f}ms")
