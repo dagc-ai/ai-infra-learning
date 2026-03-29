@@ -568,4 +568,260 @@ for this.
 
 ---
 
-*Architectures to be appended: Google TPU v5*
+## Architecture 4: Google TPU v5e (Trillium)
+
+### Exercise: tpu_matmul.py — BF16 Matmul + Fused Attention Benchmark
+**Hardware:** Google TPU v5e-1 (single chip, Google Colab free tier)
+**Script:** `phase6-alternative-hardware/tpu_matmul.py`
+
+---
+
+### Technical Comparison and Takeaways
+
+#### What Was Tested
+Two exercises on real TPU v5e hardware via Google Colab:
+
+1. BF16 matmul at 4096x4096 — same dimensions as Phase 2 CUDA tiled matmul,
+directly comparable to A100 SXM4 cuBLAS baseline.
+
+2. Fused multi-head attention forward pass — demonstrates XLA automatic
+operator fusion across matmul+softmax+matmul, the same optimization that
+required expert Triton kernel engineering in Phase 3.
+
+#### Benchmark Results
+
+**Raw matmul (4096x4096 BF16):**
+
+| Hardware | BF16 Peak | Memory BW | Achieved | Utilization | Data Source |
+|---|---|---|---|---|---|
+| A100 SXM4 | ~312 TFLOPS | 2.0 TB/s HBM | ~250 TFLOPS | ~80% | **Real — Phase 2** |
+| RTX 4090 | ~165 TFLOPS | 1.01 TB/s GDDR6X | ~130 TFLOPS | ~79% | **Real — Phase 1** |
+| TPU v5e-1 | ~197 TFLOPS | ~820 GB/s HBM | **142.3 TFLOPS** | **72.2%** | **Real — this session** |
+
+**Fused attention forward pass (batch=4, heads=16, seq=2048, d_head=64, BF16):**
+
+| Hardware | Framework | Fusion | Latency | Data Source |
+|---|---|---|---|---|
+| A100 SXM4 | PyTorch/CUDA | Manual (Flash Attention) | Phase 3 measurement | **Real — Phase 3** |
+| TPU v5e-1 | JAX/XLA | Automatic (jax.jit) | **2.60ms** | **Real — this session** |
+
+XLA automatically fused matmul+softmax+matmul into a single TPU kernel with
+no programmer intervention. This is what Phase 3's Flash Attention Triton
+kernel did manually — XLA does it by default for any jit-compiled function.
+
+**Hardware access note:** Google Cloud TPU v5e provisioning encountered
+capacity errors in us-central1-a (no capacity), wrong accelerator type
+in us-central1-b/c/f (v5litepod-1 not found), internal errors in us-west4-a,
+and quota limits (v6e-1 at 0 in us-east4-a). Successfully accessed via
+Google Colab free tier which provides TPU v5e-1 with zero provisioning
+friction. This access pattern is itself a finding — see meta-finding section.
+
+#### Key Technical Takeaways
+
+**1. The systolic array does in hardware what Phase 3 did in software.**
+In Phase 3, Flash Attention required expert Triton kernel engineering to fuse
+matmul+softmax+matmul into a single pass, avoiding materializing the N×N
+attention matrix in HBM. On TPU, `jax.jit(attention)` produces the same
+fusion automatically. XLA traces the computation graph, recognizes the pattern,
+and emits a single fused kernel. The compiler-first architecture means what
+required expert optimization on CUDA is the default behavior on TPU.
+
+**2. Raw matmul throughput understates TPU's real advantage.**
+142.3 TFLOPS vs A100's 250 TFLOPS on an isolated matmul benchmark. TPU loses
+here because cuBLAS is 15 years more optimized for this specific operation and
+the A100 has higher peak TFLOPS. But this is the wrong comparison — TPU is
+optimized for full transformer training throughput where XLA fuses entire
+transformer layers into single kernels across millions of training steps.
+The fair comparison is cost per training token on a full LLM, not isolated
+microbenchmarks.
+
+**3. JAX is the ecosystem switch cost.**
+Everything in Phases 1–5 was PyTorch/CUDA. TPU requires JAX — different array
+API, different automatic differentiation, different mental model for computation.
+`jnp.dot` instead of `torch.matmul`. `jax.jit` instead of CUDA kernel launches.
+`block_until_ready()` instead of `torch.cuda.synchronize()`. The hardware is
+capable but the framework switch is real engineering work for any team with
+existing PyTorch infrastructure.
+
+**4. XLA fusion is the compiler-first thesis proven empirically.**
+72.2% matmul utilization and 2.60ms fused attention on a single v5e chip
+confirms the architecture delivers on its promise. The systolic array achieves
+healthy utilization, and the compiler handles optimization automatically. The
+question is never "does the hardware work" — it's "what does it cost to get
+your workload running on it."
+
+---
+
+### Architecture Overview
+
+**The Bet:**
+The binding constraint in large-scale transformer training and inference is
+that general-purpose hardware wastes cycles on operations that don't appear
+in transformers. Design hardware specifically for matrix multiplication,
+co-design the compiler (XLA), interconnect (ICI), and framework (JAX),
+and you can train and serve at a scale and efficiency general-purpose
+accelerators cannot match.
+
+**Hardware (TPU v5e):**
+- Systolic array compute: 128×128 MXU, 4 MXUs per TensorCore, 1 TensorCore per chip
+- ~197 TFLOPS BF16 peak per chip
+- 16GB HBM per chip, ~820 GB/s memory bandwidth
+- ICI (Inter-Chip Interconnect): purpose-built for AllReduce/AllGather patterns
+- $1.20/chip-hour on-demand
+- Full TPU generation roadmap: v4 → v5e → v5p → Trillium (v6e) → Ironwood (v7)
+
+**Where It Wins:**
+- Large-scale transformer training: the workload TPU was literally designed for
+- XLA automatic fusion: what requires expert kernel engineering on CUDA is default
+- Cost efficiency at scale: $1.20/chip-hour vs H100 at $2.50-4/hr
+- Google's own models (Gemini) run on TPU — battle-tested at frontier scale
+- ICI bandwidth: purpose-built interconnect outperforms NVLink for pod-scale training
+- Energy efficiency: 67% improvement in Trillium vs v5e generation
+
+**Where It Loses:**
+- Research flexibility: new operations require XLA ops — harder than CUDA kernels
+- Hardware access: Google Cloud only, no purchase option for most buyers
+- Ecosystem: JAX/XLA is narrower than PyTorch/CUDA — most open-source models
+  ship CUDA-first, requiring conversion or reimplementation
+- Debugging: XLA compilation errors and performance issues harder to diagnose
+  than CUDA kernel problems
+- Provisioning friction: capacity constraints, quota limits, zone-specific
+  availability — demonstrated directly in this session
+
+---
+
+### Business Implications
+
+TPU is Google's internal infrastructure externalized. Gemini runs on TPUs.
+Google Search, Google Translate, and Google Photos all run on TPUs. When
+you buy TPU access you're renting the same hardware running Google's frontier
+models — that's a quality signal no other vendor can claim at the same scale.
+
+The cost-efficiency story is the strongest entry point at scale. TPU v5e at
+$1.20/chip-hour vs H100 at $2.50-4/hr. For inference and fine-tuning workloads
+running continuously, the economics shift dramatically. Character.AI publicly
+reported a 3.8x cost improvement after migrating. Midjourney dropped monthly
+inference spend from ~$2.1M to under $700K. Anthropic committed to over one
+million Ironwood chips in 2026 — the largest single-customer AI infrastructure
+buildout ever announced.
+
+The JAX ecosystem is the adoption barrier, not the hardware. Any organization
+with existing PyTorch infrastructure faces a non-trivial migration. Models need
+to be converted, engineers need to learn JAX, debugging workflows change, and
+deployment pipelines are rebuilt. This is an infrastructure transformation, not
+a hardware swap — and it needs to be priced into any TCO analysis.
+
+Google controls the entire stack end to end: XLA compiler, ICI interconnect,
+TPU hardware, GKE orchestration, JAX framework. Maximum optimization potential
+because every layer is co-designed. Maximum vendor lock-in because nothing
+is interoperable with anything else.
+
+---
+
+### GTM Insights
+
+- **Right customer profile:** Large-scale inference at fixed model configurations
+  running continuously. Companies serving stable production models — chatbots,
+  search, recommendation — get the best TCO. The compile-ahead constraint
+  becomes irrelevant when running the same model for months.
+- **Wrong customer profile:** Teams in rapid model iteration. Every model change
+  requires JAX conversion and recompilation. Teams wanting to swap open-source
+  models weekly are better served by NVIDIA's ecosystem where vLLM serves any
+  HuggingFace checkpoint in minutes.
+- **Winning conversation:** "You're running inference continuously at scale.
+  Here's your cost per million tokens on H100 vs TPU v5e at your throughput.
+  Here is the JAX migration timeline. Here is break-even." Requires knowing
+  current infrastructure, model configuration, and monthly compute spend.
+- **Anthropic is the reference customer:** Over one gigawatt of TPU capacity
+  committed for Claude training and serving in 2026. When the company building
+  the most capable AI assistant bets its entire infrastructure on TPU, that
+  closes the "is this proven?" objection definitively.
+- **Prove on NVIDIA, optimize cost on TPU:** The sequencing that works.
+  Midjourney, Character.AI, and Perplexity all validated their model on NVIDIA
+  first, then migrated inference to TPU for cost. Position TPU as the cost
+  optimization destination for proven workloads, not the exploration platform.
+- **Access friction is a real objection:** Provisioning encountered capacity
+  errors, quota limits, and zone availability issues in this session before
+  landing on Colab. Even Google's own TPU product has non-trivial access
+  friction for new customers. NVIDIA's path from zero to running code is
+  measurably smoother — and that operational simplicity has dollar value in
+  enterprise procurement decisions.
+
+---
+
+## Phase 6 Meta-Finding: Access as NVIDIA's Deepest Moat
+
+Phase 6 took significantly longer than any prior phase — not because the
+concepts are harder, but because access to real alternative hardware is
+genuinely difficult. This is itself a primary finding.
+
+### Deployment Experience by Architecture
+
+| Architecture | Access Method | Outcome |
+|---|---|---|
+| Tenstorrent N300S | Koyeb cloud | Platform deployment failures — container never initialized (instances 3f2265e1, 8ebd286b) |
+| AMD MI300X | RunPod | ROCm 6.1 userspace / 6.10.5 kernel driver mismatch — device init hung across 3 container configs |
+| AMD MI300X | AMD Developer Cloud | At capacity — no instances available |
+| Groq LPU | GroqCloud API | Accessible — but API only, no raw hardware access |
+| Google TPU v5e | Google Cloud Console | Capacity errors (us-central1-a), wrong zone errors (us-central1-b/c/f), internal errors (us-west4-a), quota limit 0 (us-east4-a v6e) |
+| Google TPU v5e | Google Colab | Accessible — free tier, zero provisioning friction |
+| NVIDIA A100 | RunPod | Deployed and benchmarking in under 20 minutes |
+
+Every alternative hardware exercise encountered significant access friction.
+Every NVIDIA exercise in Phases 0–5 produced real measurements on first attempt.
+
+### Why This Matters
+
+This is not bad luck — it reflects a structural reality. NVIDIA has 15+ years
+of ecosystem investment that alternative hardware vendors are competing against:
+
+**Driver/userspace matching:** ROCm version mismatches that cause device
+initialization hangs don't happen with CUDA. NVIDIA driver versions and CUDA
+toolkit versions have well-established compatibility matrices with pre-tested
+container images. RunPod's NVIDIA templates work out of the box because
+thousands of developers have validated them. AMD's equivalent ecosystem is
+newer, thinner, and less battle-tested in containerized cloud environments.
+
+**Zone and capacity availability:** NVIDIA instances are available across
+dozens of providers in hundreds of zones. Alternative hardware access is
+concentrated in a handful of providers with limited zone coverage. Capacity
+constraints are common — AMD Developer Cloud at capacity, Koyeb N300S
+deployment failures, Google TPU capacity errors across multiple zones.
+
+**Container availability:** Every major cloud provider has multiple validated
+NVIDIA container images. Alternative hardware options are sparse — often a
+single vendor-provided image that may not match the host driver version.
+
+**Documentation and community:** When something breaks on CUDA, there are
+thousands of Stack Overflow answers, GitHub issues, and forum posts covering
+exactly that combination of driver, toolkit, and container. When something
+breaks on ROCm in a containerized environment, you are often the first person
+to hit that specific combination.
+
+**Zero-friction developer path:** Phase 5 baseline: `pip install vllm`, one
+command to launch the server, benchmarks running in 20 minutes. Phase 6
+alternative hardware: multiple platform failures, version mismatches, hardware
+unavailability, quota limits — eventual fallback to community benchmarks or
+API measurements for most architectures. The gap is measured in hours of
+debugging vs minutes of setup.
+
+### The GTM Implication
+
+NVIDIA's moat is not just TFLOPS or memory bandwidth — it is the accumulated
+infrastructure of developer convenience built over 15 years. When an enterprise
+buyer evaluates alternative hardware, they are comparing:
+
+- Time to first working deployment
+- Engineering hours to port existing models and pipelines
+- Availability of validated tooling, tutorials, and pre-built container images
+- Community support when something breaks in production
+- Hardware availability when capacity is needed at scale
+
+Every hour spent debugging ROCm version mismatches, navigating TPU quota
+limits, or waiting for Koyeb deployment slots is an hour not spent on model
+development. At enterprise scale, that engineering time has a real dollar cost
+that belongs in any TCO analysis alongside chip price and memory bandwidth.
+
+The alternative hardware vendors that close this gap — not just on specs but
+on developer experience — will be the ones that successfully challenge NVIDIA's
+position. Until then, ubiquity is the moat.
