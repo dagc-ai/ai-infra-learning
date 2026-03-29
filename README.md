@@ -18,8 +18,8 @@ is committed here.
 | 3 | Triton Kernel Programming | ✅ Complete | 92% peak bandwidth, 2x fusion win, Flash Attention 6.4x speedup at N=4096 |
 | 4 | Distributed Training Primitives | ✅ Complete | 228 GB/s measured vs 600 GB/s NVLink spec; Ring AllReduce from scratch; 38% of spec in virtualized env |
 | 5 | Inference & Serving Infrastructure | ✅ Complete | AWQ Marlin 2.27x BF16; 8x concurrency = 8x throughput flat latency; A100 TTFT 18ms vs Groq API 200ms; Groq 9.4x faster on throughput |
-| 6 | Alternative Hardware Architectures | 🔜 Next | Tenstorrent, AMD ROCm, TPU concepts |
-| 7 | Model Architecture & Full Stack View | ⬜ Pending | Transformer from scratch, scaling laws |
+| 6 | Alternative Hardware Architectures | ✅ Complete | Groq 672.9 tok/s (7.2x A100); TPU v5e 142.3 TFLOPS / XLA auto-fusion confirmed; deployment friction documented across all 4 architectures |
+| 7 | Model Architecture & Full Stack View | 🔜 Next | Transformer from scratch, scaling laws |
 
 ---
 
@@ -485,3 +485,128 @@ The gap between a misconfigured and well-configured inference stack on identical
 hardware exceeded 10x in measured results. The 9–13x throughput gap between a
 correctly configured A100 and Groq's LPU is architectural — not a configuration
 problem. Understanding which gap is which is the foundation of Phase 6.
+
+## Phase 6 — Alternative Hardware Architectures
+
+**Hardware accessed:** Tenstorrent Wormhole N300S (Koyeb), AMD MI300X (RunPod + AMD Developer Cloud),
+Groq LPU (GroqCloud API), Google TPU v5e (Google Colab)  
+**Note:** Direct measurement was not possible on Tenstorrent or AMD due to platform failures and driver
+mismatches. Those results use clearly labeled community benchmarks. Groq and TPU v5e produced real
+measurements. Deployment experience across all four is itself a primary finding.
+
+### Key Results
+
+**Tenstorrent Wormhole N300S — BF16 Matmul + Inference**
+
+| Hardware | BF16 Peak | Memory BW | Achieved | Data Source |
+|----------|-----------|-----------|----------|-------------|
+| A100 SXM4 | ~312 TFLOPS | 2.0 TB/s HBM | ~250 TFLOPS | Real — Phase 2 |
+| RTX 4090 | ~165 TFLOPS | 1.01 TB/s GDDR6X | ~130 TFLOPS | Real — Phase 1 |
+| N300S Wormhole | ~233 TFLOPS | 576 GB/s GDDR6 | ~140–175 TFLOPS | Community benchmarks (corsix.org, FOSDEM 2025) |
+
+Inference throughput — single-user, 7–8B model class, BF16:
+
+| Hardware | Model | tok/s | Data Source |
+|----------|-------|-------|-------------|
+| A100 SXM4 | Mistral 7B BF16 | 96.5 | Real — Phase 5 |
+| N300S Wormhole | Llama 3.1 8B BF16 | ~24 | Tenstorrent official (hand-optimized) |
+
+~4x throughput gap reflects the core constraint: Llama 3.1 8B (14GB) exceeds the N300S's 192MB
+SRAM and spills to GDDR6 at 576 GB/s — less than a third of A100 HBM bandwidth.
+TILE_LAYOUT mandatory at storage level adds real porting cost vs CUDA's row-major default.
+Koyeb deployment failures (instances 3f2265e1, 8ebd286b) prevented direct measurement.
+
+**AMD MI300X — Llama 70B Inference**
+
+| Hardware | Config | tok/s | Data Source |
+|----------|--------|-------|-------------|
+| A100 SXM4 ×2 | TP=2 required | 21.2 (70B proxy) | Real — Phase 5 Part 3 |
+| MI300X | TP=1 native | ~37 | Chips & Cheese; AMD MLPerf v4.1 |
+
+192GB HBM3 is the architectural differentiator — the entire Llama 70B model fits on one chip,
+eliminating the AllReduce overhead that forces A100 and H100 onto TP=2. ~40% lower latency
+vs H100 on 70B decode comes entirely from eliminating that inter-GPU communication step.
+
+Realized throughput: independent analysis (arxiv:2510.27583) found MI300X achieves 37–66%
+of H100/H200 throughput despite higher theoretical specs — ROCm kernel optimization still
+lags CUDA. RunPod deployment failed across three container configurations due to ROCm 6.1
+userspace / 6.10.5 kernel driver mismatch. AMD Developer Cloud was at capacity.
+
+**Groq LPU — TTFT and Throughput Benchmark (real measurements)**
+
+Methodology: ~100 token prompt, 200 token output, temperature=0, streaming, 1 warmup excluded,
+5 run mean. Identical to Phase 5 Part 3. Network latency to Groq datacenter: ~13ms round-trip
+from Austin, TX.
+
+| Hardware | Model | tok/s | TTFT | Data Source |
+|----------|-------|-------|------|-------------|
+| A100 SXM4 (local) | Llama 3.1 8B | 93.0 | 18.1ms | Real — Phase 5 Part 3 |
+| A100 SXM4 (local) | Llama 3.3 70B | 21.2 | 58.0ms | Real — Phase 5 Part 3 |
+| Cloud API median | Llama 3.1 8B | 154.8 | 930ms | ArtificialAnalysis |
+| Cloud API median | Llama 3.3 70B | 85.5 | 1,410ms | ArtificialAnalysis |
+| Groq LPU (API) | Llama 3.1 8B | **672.9** | **130.8ms** | Real — this session |
+| Groq LPU (API) | Llama 3.3 70B | **263.1** | **135.4ms** | Real — this session |
+| Groq LPU (spec dec) | Llama 3 70B | **1,665** | — | Groq published |
+
+Groq vs cloud API median: 4.3x faster throughput on 8B, 3.1x on 70B, 7x lower TTFT on 8B.
+TTFT breakdown: ~6.5ms network, ~14ms LPU compute, ~110ms API infrastructure overhead.
+On-premise LPU compute TTFT (~14ms) actually beats A100 local (18ms) by 22% — the API
+overhead obscures this in cloud comparisons.
+
+NVIDIA acquired Groq in December 2025. GroqCloud remains operational; long-term roadmap
+under NVIDIA ownership is uncertain.
+
+**Google TPU v5e — BF16 Matmul + Fused Attention (real measurements)**
+
+| Hardware | BF16 Peak | Achieved | Utilization | Data Source |
+|----------|-----------|----------|-------------|-------------|
+| A100 SXM4 | ~312 TFLOPS | ~250 TFLOPS | ~80% | Real — Phase 2 |
+| RTX 4090 | ~165 TFLOPS | ~130 TFLOPS | ~79% | Real — Phase 1 |
+| TPU v5e-1 | ~197 TFLOPS | 142.3 TFLOPS | 72.2% | Real — this session |
+
+Fused attention (batch=4, heads=16, seq=2048, d_head=64, BF16): **2.60ms** via `jax.jit`.
+XLA automatically fused matmul+softmax+matmul into a single TPU kernel with no programmer
+intervention — the same optimization Phase 3 required expert Triton kernel engineering to achieve.
+
+Google Cloud provisioning failed across five zones (capacity errors, wrong accelerator type,
+quota limits). Accessed via Google Colab free tier — zero provisioning friction.
+
+### Phase 6 Meta-Finding: Developer Experience as NVIDIA's Deepest Moat
+
+Every alternative hardware exercise encountered significant access friction. Every NVIDIA
+exercise in Phases 0–5 produced real measurements on the first attempt.
+
+| Architecture | Access method | Outcome |
+|--------------|---------------|---------|
+| Tenstorrent N300S | Koyeb cloud | Platform deployment failures — container never initialized |
+| AMD MI300X | RunPod | ROCm userspace/kernel driver mismatch across 3 container configs |
+| AMD MI300X | AMD Developer Cloud | At capacity |
+| Groq LPU | GroqCloud API | Accessible — API only, no raw hardware access |
+| Google TPU v5e | Google Cloud Console | Capacity errors, wrong zone errors, quota limits across 5 zones |
+| Google TPU v5e | Google Colab | Accessible — free tier, zero friction |
+| NVIDIA A100/RTX 4090 | RunPod | Deployed and benchmarking in under 20 minutes, every time |
+
+This is not bad luck — it reflects 15 years of accumulated ecosystem investment.
+NVIDIA driver compatibility matrices are battle-tested across thousands of container
+configurations. Alternative hardware ecosystems are newer, thinner, and less validated
+in containerized cloud environments. Every hour debugging ROCm version mismatches or
+navigating TPU quota limits is engineering time that belongs in any TCO analysis
+alongside chip price and memory bandwidth.
+
+### What This Means
+
+Every accelerator architecture is an answer to the same question: where is the binding
+constraint? Tenstorrent bets it's on-chip memory bandwidth for small models. AMD bets
+it's memory capacity for large ones. Groq bets it's latency unpredictability. TPU bets
+it's the mismatch between general-purpose hardware and transformer-specific operations.
+Each is correct for a specific workload shape — and each requires real engineering work
+to access and operate, in a way NVIDIA currently does not.
+
+### Key Insight
+
+NVIDIA's moat is not just TFLOPS or memory bandwidth. It is the accumulated infrastructure
+of developer convenience built over 15 years: validated container images, community-tested
+compatibility matrices, thousands of Stack Overflow answers for every failure mode, and a
+path from zero to running code measured in minutes. Alternative hardware vendors that close
+this gap — not just on specs but on developer experience — will be the ones that
+successfully challenge NVIDIA's position. Until then, ubiquity is the moat.
