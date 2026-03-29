@@ -5,7 +5,7 @@ Over six phases and roughly six months, I worked through the full AI compute sta
 
 The throughline is the same insight wearing different clothes at every layer: the binding constraint in AI systems is almost always data movement, not computation. Flash Attention unlocked 100K-token context windows not through better hardware, but by restructuring attention to avoid materializing a giant intermediate matrix in HBM. AWQ INT4 with the wrong kernel is 5x slower than BF16. The roofline model from Phase 1, built from two numbers on a spec sheet, predicted every benchmark result across six phases before I ran a single line of code.
 
-I'm not an ML engineer. I'm a sales professional with an EE background who wanted to have technically grounded conversations about AI infrastructure that most people in go-to-market roles can't have because they've never run the code. This is what I built to close that gap.
+I'm not an AI engineer. I'm a sales professional with an EE background who wanted to have technically grounded conversations about AI infrastructure that most people in go-to-market roles can't have because they've never run the code. This is what I built to close that gap.
 
 ---
 
