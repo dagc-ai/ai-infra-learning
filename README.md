@@ -340,9 +340,9 @@ NVIDIA's most durable competitive moat — more defensible than the GPU itself.
 
 ## Phase 5 — Inference & Serving Infrastructure
 
-**Hardware:** A100 SXM4 80GB, CUDA 12.4, PyTorch 2.4.0, vLLM 0.18.0, RunPod  
-**Models:** Mistral-7B-Instruct-v0.3 (BF16/AWQ) and Llama-3.1-8B-Instruct (BF16/AWQ)  
-**Note:** All exercises run twice — once on Mistral 7B, repeated on Llama 3.1 8B to validate generalizability across model families.
+**Hardware:** A100 SXM4 80GB (single and 2×), CUDA 12.4, PyTorch 2.4.0, vLLM 0.18.0, RunPod  
+**Models:** Mistral-7B-Instruct-v0.3, Llama-3.1-8B-Instruct, Llama-3.3-70B-Instruct  
+**Note:** Exercises run across three parts — Mistral 7B baseline, Llama 3.1 8B cross-validation, and a TTFT streaming benchmark designed for direct comparison with published Groq LPU numbers.
 
 ### Key Results
 
@@ -385,15 +385,14 @@ behavior is architecture-agnostic — a property of vLLM's scheduler, not the mo
 
 Key findings confirmed across both model families:
 
-- **AWQ naive penalty is model-agnostic.** Both models landed at ~20.8 tok/s regardless
-  of architecture. Dequantization overhead completely dominates — a kernel property,
-  not a model property.
-- **BF16 throughput tracks weight size directly.** 3% throughput gap between models
-  matches their 11% weight size difference. Memory-bandwidth-bound result predicted
-  by the roofline model before running.
+- **AWQ naive penalty is model-agnostic.** Both models landed at ~20.8 tok/s.
+  Dequantization overhead completely dominates — a kernel property, not a model property.
+- **BF16 throughput tracks weight size directly.** 3% throughput gap matches 11%
+  weight size difference. Memory-bandwidth-bound result predicted by roofline model
+  before running.
 - **Marlin speedup is slightly lower for the larger model** (2.14x vs 2.27x) because
-  attention and unquantized operations become a larger fraction of total runtime.
-  The bottleneck partially shifts as weight loading accelerates.
+  attention and unquantized operations become a larger fraction of total runtime as
+  weight loading accelerates.
 
 Error encountered and documented: initial AWQ run used `--quantization awq` instead
 of `--quantization awq_marlin`. vLLM warned at startup that Marlin was available but
@@ -402,51 +401,75 @@ full performance. One flag, 10x difference.
 
 **Exercise 5.3 — Speculative Decoding**
 
-Two runs: mismatched draft model (Phase 5 Part 1), then correctly matched draft model
-(Phase 5 Part 2).
+Two runs: mismatched draft model, then correctly matched draft model.
 
-| Configuration | Throughput | vs BF16 baseline |
-|---------------|------------|-----------------|
-| Mistral 7B BF16 | 96.5 tok/s | 1.0x |
+| Configuration | Throughput | vs BF16 |
+|---------------|------------|---------|
 | Mistral 7B AWQ Marlin | 218.9 tok/s | 2.27x |
-| Mistral 7B AWQ Marlin + TinyLlama 15M draft (mismatched) | 67.5 tok/s | 0.7x |
-| Llama 3.1 8B BF16 | 93.1 tok/s | 1.0x |
+| + TinyLlama 15M draft (mismatched family) | 67.5 tok/s | 0.7x |
 | Llama 3.1 8B AWQ Marlin | 199.1 tok/s | 2.14x |
-| Llama 3.1 8B AWQ Marlin + Llama 3.2 1B draft (matched) | 106.4 tok/s | 1.14x |
+| + Llama 3.2 1B draft (matched family) | 106.4 tok/s | 1.14x |
 
-Mismatched draft (TinyLlama → Mistral): same tokenizer vocabulary, different training
-family. Target rejection rate was high. Paid cost of both models, benefit of neither.
-Result: 3x slower than target alone.
+Mismatched draft: same tokenizer vocabulary, different training family. High rejection
+rate — paid cost of both models, benefit of neither. 3x slower than target alone.
 
-Matched draft (Llama 3.2 1B → Llama 3.1 8B): same Meta training family, same RLHF
-process, identical tokenizer. Draft acceptance rate: 59.5%. Mean accepted tokens per
-verify pass: 3.98. Result: 1.14x BF16 at low concurrency, latency reduction confirmed.
+Matched draft: same Meta training family, same RLHF process. Draft acceptance rate:
+59.5%. Mean accepted tokens per verify pass: 3.98. Result: latency improvement
+confirmed at low concurrency. Throughput measurement penalty vs Marlin alone is a
+vLLM 0.18.0 scheduling limitation — async scheduling is disabled when speculative
+decoding is active.
 
-Throughput penalty vs AWQ Marlin alone is a vLLM 0.18.0 scheduling limitation: async
-scheduling is disabled when speculative decoding is active, forcing synchronous
-CPU/GPU handoffs between every draft and verify round. The 60% acceptance rate and
-~4 token mean acceptance length are genuine — this is a legitimate production
-configuration.
+Shared tokenizer vocabulary is necessary but not sufficient for speculative decoding.
+Training dynamics must align. Llama 3.2 1B → Llama 3.1 8B is a legitimate production
+configuration. TinyLlama → Mistral is not.
 
-Speculative decoding at concurrency=2 produced an anomalous result (136.6 tok/s vs
-106.9 at concurrency=1): two requests sharing synchronous draft/verify rounds create
-head-of-line blocking. Resolved at concurrency=4 where the scheduler has sufficient
-work to fill the gaps.
+**Exercise 5.4 — TTFT Streaming Benchmark & Hardware Comparison Baseline**
+
+Methodology: fixed ~100-token prompt, 200-token output, temperature=0, streaming
+enabled, 1 warmup run excluded, 5 timed runs averaged. Matches Groq's published
+benchmark methodology for direct comparability.
+
+A100 results:
+
+| Model | Precision | TTFT | Throughput | Total time | Config |
+|-------|-----------|------|------------|------------|--------|
+| Llama 3.1 8B | BF16 | 18.1ms | 93.0 tok/s | 2,157ms | TP=1, 1× A100 |
+| Llama 3.3 70B | BF16 | 58.0ms | 21.2 tok/s | 9,436ms | TP=2, 2× A100 |
+
+70B constraint: 134GB of weights split across 2× 80GB GPUs left only 3.93 GiB for
+KV cache (25,728 token capacity). Viable for single-request benchmarking, not
+production multi-user serving.
+
+A100 vs Groq LPU (Artificial Analysis published benchmarks):
+
+| Model | A100 tok/s | Groq tok/s | Groq advantage | A100 TTFT | Groq API TTFT | TTFT winner |
+|-------|------------|------------|----------------|-----------|----------------|-------------|
+| Llama 3.1 8B | 93.0 | 877 | 9.4x | 18.1ms | ~200ms | A100 (11x) |
+| Llama 3.3 70B | 21.2 | 276 | 13x | 58.0ms | ~450ms | A100 (7.8x) |
+
+The TTFT reversal is explained by network round-trip. Groq API TTFT includes
+client-to-datacenter latency. Local vLLM has none. Groq's throughput advantage is
+real and architectural — covered in Phase 6. The TTFT advantage of local deployment
+shrinks with longer outputs as Groq's throughput lead compounds.
+
+Warmup effect documented: first-request TTFT was 42ms for 8B vs 18ms steady state.
+CUDA graph initialization on the first request; subsequent requests reuse it.
+Warmup exclusion is required for accurate TTFT measurement.
 
 ### What This Means
 
 Inference is not a compute problem — it is a memory problem. The A100 has 312 TFLOPS
 sitting mostly idle during decode. What limits token generation speed is how fast
 model weights can be loaded from HBM on every single decode step. Every optimization
-in this phase is a variation of the same principle from Phases 1–3: minimize expensive
-data movement, maximize useful work per memory access. The roofline model built in
-Phase 1 predicted every result in Phase 5 before a single benchmark was run.
+in this phase — batching, quantization, speculative decoding — is a variation of the
+same principle from Phases 1–3: minimize expensive data movement, maximize useful work
+per memory access. The roofline model built in Phase 1 predicted every result here
+before a single benchmark was run.
 
 The non-obvious finding: optimization method and optimization implementation are
 different things. AWQ INT4 with the wrong kernel was 5x slower than BF16. AWQ INT4
 with the right kernel was 2.27x faster. Speculative decoding with the wrong draft
-model was 3x slower than no speculative decoding. Speculative decoding with the right
-draft model improved latency at low concurrency. Same technique, opposite outcomes.
+family was 3x slower than no speculative decoding. Same technique, opposite outcomes.
 
 ### Key Insight
 
@@ -459,5 +482,6 @@ The optimization sequence matters. Fix in this order before buying hardware:
    training family as target (shared vocabulary is necessary, not sufficient)
 
 The gap between a misconfigured and well-configured inference stack on identical
-hardware exceeded 10x in measured results. A self-hosted deployment running naive
-AWQ at low batch utilization will cost more than a managed API at the same volume.
+hardware exceeded 10x in measured results. The 9–13x throughput gap between a
+correctly configured A100 and Groq's LPU is architectural — not a configuration
+problem. Understanding which gap is which is the foundation of Phase 6.
