@@ -352,3 +352,94 @@ Llama 3.1 8B AWQ Marlin + spec (correct)   |  106.4 tok/s |  1.14x
 
 5. Draft acceptance rate is stable across both runs (~60%). The 1B/8B Llama
    pairing is a legitimate production configuration.
+
+```markdown
+---
+
+## Phase 5 Part Appendix — TTFT Benchmark & Hardware Comparison Setup
+
+### Purpose
+Measure Time to First Token (TTFT) and decode throughput using a streaming benchmark
+methodology designed to produce results directly comparable to published Groq LPU
+benchmarks. Establishes the A100 SXM4 baseline for the Phase 6 alternative hardware
+architecture comparison.
+
+Hardware: 2x A100 SXM4 80GB (RunPod), vLLM 0.18.0.
+Script: phase5-inference/benchmark_ttft.py
+
+### Methodology
+- Fixed prompt: ~100 input tokens (same text across all runs)
+- Fixed output: 200 tokens (temperature=0, greedy decoding)
+- Streaming enabled: measures TTFT as time to first chunk received
+- 1 warmup run (excluded), 5 timed runs, report mean
+- Single request, no batching — matches Groq's published benchmark methodology
+
+### Why TTFT Requires Streaming
+Non-streaming benchmarks measure total wall-clock time only — prefill + decode
+collapsed into one number. Streaming sends tokens as they are generated, allowing
+measurement of the exact moment the first token arrives. TTFT = time from request
+sent to first token received. Everything after is decode throughput.
+
+### Benchmark Results
+
+| Model         | Precision | TTFT (ms) | tok/s | Total (ms) | Hardware             | Config |
+|---------------|-----------|-----------|-------|------------|----------------------|--------|
+| Llama 3.1 8B  | BF16      | 18.1      | 93.0  | 2,157      | A100 SXM4 80GB       | TP=1   |
+| Llama 3.3 70B | BF16      | 58.0      | 21.2  | 9,436      | 2x A100 SXM4 80GB    | TP=2   |
+
+### Key Observations
+
+**Warmup effect on TTFT:**
+Warmup run TTFT was 42ms for 8B vs 18ms steady state. Gap caused by CUDA graph
+initialization — first request builds execution graph, subsequent requests reuse it.
+Warmup runs matter. The 18.1ms figure reflects real steady-state performance.
+
+**Prefix cache effect:**
+vLLM's prefix cache hit rate climbed to 74% by run 5 — the same 100-token prompt
+repeated across runs caused KV cache reuse. TTFT on runs 2-5 slightly benefits from
+this. In production with unique prompts per request, cold TTFT would be marginally
+higher. Noted for methodology transparency.
+
+**70B TTFT vs 8B:**
+TTFT scales with model size — 80 layers vs 32 layers means more compute to process
+the prompt before producing the first token. 58ms vs 18ms is a 3.2x ratio, roughly
+proportional to layer count difference.
+
+**70B KV cache constraint:**
+With 134GB of weights split across 2x 80GB GPUs, only 3.93 GiB remained for KV
+cache (25,728 token capacity). Adequate for single-request benchmarking (300 tokens
+total) but severely limits concurrent serving capacity. 70B BF16 on 2x A100 is a
+viable single-user configuration, not a production multi-user configuration.
+
+**Decode throughput gap:**
+70B decode throughput (21.2 tok/s) vs 8B (93.0 tok/s) is a 4.4x gap — not 8.75x
+as raw parameter ratio would suggest. TP=2 distributes weight loading across both
+GPUs, partially recovering bandwidth. Each GPU only needs to load half the model
+weights per decode step. TP=1 on a single GPU would be slower still.
+
+### Groq Comparison Preview (Full Analysis in Phase 6)
+
+Published Groq LPU benchmarks (Artificial Analysis, independent):
+
+| Model         | tok/s (standard) | tok/s (spec dec) | TTFT (API)  |
+|---------------|------------------|------------------|-------------|
+| Llama 3.1 8B  | 877              | --               | ~200ms      |
+| Llama 3.3 70B | 276              | 1,665            | ~450ms      |
+
+A100 vs Groq throughput gap:
+- 8B: Groq 877 vs A100 93.0 — 9.4x faster on Groq
+- 70B: Groq 276 vs A100 21.2 — 13x faster on Groq (standard mode)
+
+A100 vs Groq TTFT:
+- 8B: A100 local 18ms vs Groq API ~200ms — A100 wins by 11x
+- 70B: A100 local 58ms vs Groq API ~450ms — A100 wins by 7.8x
+
+The TTFT reversal is explained by network round-trip. Groq's API TTFT includes
+client-to-datacenter latency. Local vLLM has none. For on-premises deployment,
+A100 TTFT is competitive. For cloud API users, Groq's throughput advantage is real
+and the TTFT difference shrinks with longer outputs.
+
+The architectural reason for Groq's throughput advantage is covered in Phase 6:
+SRAM-centric execution eliminates the HBM bandwidth bottleneck that makes A100
+inference memory-bound. Full analysis there.
+```
