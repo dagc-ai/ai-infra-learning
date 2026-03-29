@@ -17,7 +17,7 @@ is committed here.
 | 2 | CUDA Kernel Programming | ✅ Complete | Tiled matmul 7.2 TFLOPS vs cuBLAS 54 TFLOPS; 8x HBM traffic reduction confirmed via ncu |
 | 3 | Triton Kernel Programming | ✅ Complete | 92% peak bandwidth, 2x fusion win, Flash Attention 6.4x speedup at N=4096 |
 | 4 | Distributed Training Primitives | ✅ Complete | 228 GB/s measured vs 600 GB/s NVLink spec; Ring AllReduce from scratch; 38% of spec in virtualized env |
-| 5 | Inference & Serving Infrastructure | ✅ Complete | AWQ Marlin 2.27x BF16; 8x concurrency = 8x throughput flat latency; spec decoding validated across matched and mismatched draft families |
+| 5 | Inference & Serving Infrastructure | ✅ Complete | AWQ Marlin 2.27x BF16; 8x concurrency = 8x throughput flat latency; A100 TTFT 18ms vs Groq API 200ms; Groq 9.4x faster on throughput |
 | 6 | Alternative Hardware Architectures | 🔜 Next | Tenstorrent, AMD ROCm, TPU concepts |
 | 7 | Model Architecture & Full Stack View | ⬜ Pending | Transformer from scratch, scaling laws |
 
