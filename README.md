@@ -20,7 +20,7 @@ I'm not an AI engineer. I'm a sales professional with an EE background who wante
 | 4 | Distributed Training Primitives | ✅ Complete | 228 GB/s measured vs 600 GB/s NVLink spec; Ring AllReduce from scratch; 38% of spec in virtualized env |
 | 5 | Inference & Serving Infrastructure | ✅ Complete | AWQ Marlin 2.27x BF16; 8x concurrency = 8x throughput flat latency; A100 TTFT 18ms vs Groq API 200ms; Groq 9.4x faster on throughput |
 | 6 | Alternative Hardware Architectures | ✅ Complete | Groq 672.9 tok/s (7.2x A100); TPU v5e 142.3 TFLOPS / XLA auto-fusion confirmed; deployment friction documented across all 4 architectures |
-| 7 | Model Architecture & Full Stack View | 🔜 Next | Transformer from scratch, scaling laws |
+| 7 | Model Architecture & Full Stack View | ✅ Complete | 30M param GPT trained from scratch; scaling law verified empirically (1–2% fit error); warmup misconfiguration = silent 20% permanent loss penalty |
 
 ---
 
@@ -611,3 +611,151 @@ compatibility matrices, thousands of Stack Overflow answers for every failure mo
 path from zero to running code measured in minutes. Alternative hardware vendors that close
 this gap — not just on specs but on developer experience — will be the ones that
 successfully challenge NVIDIA's position. Until then, ubiquity is the moat.
+
+---
+
+## Phase 7 — Model Architecture & The Full Stack View
+
+**Hardware:** A100 SXM4 80GB, CUDA 12.4, PyTorch 2.4.0, RunPod  
+**Model:** 30M parameter GPT-style transformer, trained from scratch on TinyShakespeare
+
+### Key Results
+
+**Exercise 7.1 — Data Preparation**
+
+| Metric | Value |
+|--------|-------|
+| Raw characters | 1,115,394 |
+| Total tokens (GPT-2 BPE) | 338,025 |
+| Vocabulary size | 50,257 |
+| Compression ratio | 3.30 chars/token |
+| Train / val split | 304,222 / 33,803 tokens |
+
+BPE compression ratio directly determines attention cost — shorter sequences mean
+cheaper O(N²) attention computation. uint16 storage (not int32) halves memory
+bandwidth requirements while covering the full 50,257 vocabulary.
+
+**Exercise 7.2 — Model Implementation (nanoGPT)**
+
+| Component | Parameters |
+|-----------|------------|
+| Token embedding (wte) | 19.3M (64% of total) |
+| Position embedding (wpe) | 98K |
+| 6 transformer blocks | 10.6M |
+| Total | 30.02M |
+
+Sanity check: initial loss 10.926 vs expected ln(50257) = 10.825 — gap of 0.10,
+within normal range for random initialization. Logits shape (4, 64, 50257) correct.
+
+The embedding table dominates at small n_embd — 64% of a "30M parameter model"
+is a lookup table, not reasoning capacity. Weight tying (sharing embedding and
+output head weights) reduces parameters by 19.3M and empirically improves
+language modeling performance.
+
+**Exercise 7.3 — Overfitting: Capacity vs. Data Mismatch**
+
+30M parameter model on 304K training tokens (0.01 tokens/param):
+
+| Iteration | Train loss | Val loss |
+|-----------|------------|----------|
+| 0 | 10.91 | 10.91 |
+| 500 | 2.49 | 5.19 |
+| 1,000 | 0.46 | 6.94 |
+| 2,000 | 0.14 | 8.70 |
+| 5,000 | 0.07 | 9.58 |
+
+Generated output at iter 5,000: verbatim Romeo and Juliet Act IV. Complete memorization.
+
+7.25M model (same dataset, 0.042 tokens/param): val loss floors at 5.70, generates
+novel Shakespeare-style text not present in training data.
+
+Throughput delta: 7.25M at 389K tok/s vs 30M at 203K tok/s — nearly 2x, driven by
+smaller activation tensors fitting better in L2 cache. The memory hierarchy from
+Phase 1 reappears at the model architecture level.
+
+**Exercise 7.4 — Scaling Law Experiment**
+
+Four models trained at increasing scale, fixed dataset:
+
+| Model | Non-embed params | Best val loss | Best at iter | Chinchilla starvation |
+|-------|-----------------|---------------|--------------|----------------------|
+| nano | 98,944 | 5.3410 | 500 | 6.5x underfed |
+| micro | 333,120 | 4.9774 | 750 | 21.9x underfed |
+| mini | 788,736 | 4.7920 | 750 | 51.8x underfed |
+| small | 2,659,200 | 4.8181 | 500 | 174.8x underfed |
+
+Power law fit (nano, micro, mini): L(N) = 7.5929 × N^(-0.0321), fit error 1–2.4%.
+The small model broke the law — best val loss worse than mini despite 3.4x more
+parameters. Cause: 174.8x overtrained relative to Chinchilla-optimal token count.
+The scaling law has a hidden precondition: each model must be trained to its optimal
+point. Violate that and the prediction fails.
+
+Scaling exponent α = 0.0321 vs Kaplan et al. α = 0.076 — direction correct, rate
+slower. Every model was data-starved, compressing the loss range and flattening the
+curve. The exponent is dataset-dependent, not universal.
+
+**Exercise 7.5b — Engineered Failure Modes**
+
+Deliberately removed residuals, LayerNorm, warmup, and gradient clipping to produce
+and characterize each failure mode.
+
+Gradient death (residuals + LayerNorm both removed):
+
+| Config | Residuals | LayerNorm | Result |
+|--------|-----------|-----------|--------|
+| Broken | OFF | OFF | Loss frozen at 10.81, grad_norm = 0.0 |
+| Residuals only | ON | OFF | Learns but noisy, grad_norm spikes to 8.0 |
+| LayerNorm only | OFF | ON | Learns smoothly, floors at 6.3 |
+| Control | ON | ON | Fastest descent, lowest loss 5.50 |
+
+BF16 underflow mechanism: sequential attenuation through 12 unnormalized layers
+pushed activations below BF16 minimum representable value (~1e-4), producing
+exactly zero gradients. Complete freeze from iteration 0 — not an explosion,
+a silent death.
+
+Warmup sensitivity (batch=128):
+
+| Config | Final loss | vs control |
+|--------|------------|------------|
+| No warmup | 4.2703 | +20% worse |
+| Short warmup (50 iters) | 3.5801 | +4.5% worse |
+| Full warmup (200 iters) | 3.4243 | baseline |
+
+No-warmup damage is permanent and silent — loss goes down, training appears
+healthy, the 20% gap is only visible against a control run.
+
+High LR (100x, AdamW): did not NaN. AdamW's adaptive per-parameter learning rates
+absorbed most of the raw LR magnitude increase. Effective step size scales
+sub-linearly — a 100x LR increase produced ~3-5x larger effective updates, not 100x.
+Damage occurred in the first 50 iterations and persisted to final loss despite
+cosine decay bringing LR near baseline by iter 275.
+
+### What This Means
+
+Building a transformer from scratch closes the loop on everything in Phases 1–6.
+The KV cache in Phase 5 exists because token generation is a sequential loop —
+one forward pass per output token, 500 passes for a 500-token response. Flash
+Attention in Phase 3 exists because attention cost scales as O(N²) with sequence
+length, and the N here is the token count computed in Exercise 7.1. The memory
+hierarchy principle from Phase 1 reappeared in the throughput delta between the
+30M and 7.25M models. The same roofline model that predicted Phase 5 quantization
+results predicted training throughput here.
+
+The failure mode experiments revealed something counterintuitive: modern training
+infrastructure is collectively so robust that engineering visible failures at small
+scale required removing multiple components simultaneously. Each technique — AdamW,
+residuals, LayerNorm, gradient clipping — was added in response to a real failure
+at scale. The failures that required deliberate engineering to produce at 12M
+parameters on 300K tokens are routine operational concerns at 70B parameters on
+trillion-token datasets. Scale is the multiplier that makes each fragility relevant.
+
+### Key Insight
+
+The most dangerous training failures are the silent ones. Gradient explosion produces
+NaN — immediately visible. Warmup misconfiguration produces a model that trains
+normally, converges cleanly, and is permanently 20% worse than it should be. Without
+a control run, you would never know. The scaling law has the same property: it predicts
+correctly when models are trained to their optimal point, and breaks silently when
+they are not. Log gradient norms alongside loss on every run. Track best val loss
+and checkpoint accordingly. Run a control. The control is not overhead — it is the
+only way to detect silent degradation.
