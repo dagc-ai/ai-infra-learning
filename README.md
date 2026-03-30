@@ -1,5 +1,7 @@
 # AI Infrastructure Learning Journey
-
+---
+[dagc.ai](https://www.dagc.ai) | [LinkedIn](https://www.linkedin.com/in/danielaleguerrero/)
+---
 Most people who work with AI understand it at the layer they live in. What almost nobody has is a coherent mental model of the whole stack. This repo is my attempt to build that from the ground up.
 Over six phases and roughly six months, I worked through the full AI compute stack hands-on: writing CUDA kernels, implementing Ring AllReduce from scratch, deploying vLLM on A100s, and benchmarking Groq's LPU against my own A100 baseline. Every concept has an exercise. Every exercise produces a real number. Every number is committed here with the hardware, the conditions, and where I hit failures, an honest account of what went wrong and why.
 
