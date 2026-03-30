@@ -454,3 +454,132 @@ understand the economics of model development at a level most enterprise sales
 counterparts do not. It also creates a natural checkpoint: if the scaling curve
 is clean, proceed; if it's noisy, diagnose before spending. This framing positions
 you as a risk-reduction partner rather than a vendor pushing a solution.
+
+## Exercise 7.5b — Engineered Failure Modes (Instability _f Series)
+
+### Goal
+Engineer the specific conditions required to trigger each training failure mode.
+The original instability experiment (7.5) produced null results because the model
+was too small. This series identifies exactly what scale and conditions are required
+to produce observable failures.
+
+### Experiment A2 — Gradient Death (residuals + LayerNorm removed)
+Four configurations isolating residuals and LayerNorm as independent variables.
+
+| Config | Residuals | LayerNorm | Result |
+|--------|-----------|-----------|--------|
+| 1 — Broken | OFF | OFF | Loss frozen at 10.81, grad_norm=0.0 |
+| 2 — Residuals only | ON | OFF | Learns but noisy, grad_norm spikes to 8.0 |
+| 3 — LayerNorm only | OFF | ON | Learns smoothly, floors at 6.3 |
+| 4 — Control | ON | ON | Fastest descent, lowest loss 5.50 |
+
+**Finding:** Removing both residuals and LayerNorm caused complete gradient death
+— not explosion. BF16 underflow mechanism: sequential attenuation through 12
+unnormalized layers pushed activations below BF16's minimum representable value
+(~1e-4), producing exactly zero gradients. The model was completely frozen from
+iteration 0.
+
+Residuals and LayerNorm solve orthogonal problems:
+- Residuals: gradient highway + delta learning (preserves information across depth)
+- LayerNorm: activation magnitude stability (prevents attenuation/amplification)
+
+Neither alone achieves what both together provide.
+
+### Experiment B — Warmup Sensitivity
+
+| Config | Warmup | Final Loss | vs Control |
+|--------|--------|------------|------------|
+| No warmup | 0 iters | 4.2703 | +20% worse |
+| Short warmup | 50 iters | 3.5801 | +4.5% worse |
+| Full warmup | 200 iters | 3.4243 | baseline |
+
+Batch=128 (4x normal). No collapse observed but permanent performance gap.
+
+**Finding:** No-warmup model is permanently behind after 500 iterations despite
+appearing to learn faster early. First update at full LR on random weights pushed
+model into a shallow basin it couldn't escape. Warmup failure is silent — loss
+goes down, training appears healthy, damage only visible against a control.
+CLIPPED events in no-warmup run were sporadic throughout training vs. structured
+(warmup phase only) in control — evidence of persistent instability vs. controlled
+ramp.
+
+### Experiment C — Learning Rate Too High
+
+| Config | LR | Clipping | Final Loss | Loss Std |
+|--------|----|----------|------------|----------|
+| 10x LR | 0.01 | ON | 4.8822 | 0.0758 |
+| 100x LR | 0.1 | OFF | 5.2981 | 0.0710 |
+| 100x LR | 0.1 | ON | 5.3990 | 0.0697 |
+| Control | 0.001 | ON | 4.6779 | 0.0775 |
+
+**Finding:** 100x LR with AdamW did not NaN. AdamW's adaptive per-parameter
+learning rates divide each update by sqrt(gradient variance), absorbing much of
+the raw LR magnitude increase. Effective step size scales sub-linearly with LR —
+a 100x LR increase produces ~3-5x larger effective updates, not 100x. Vanilla SGD
+with LR=0.1 and no clipping would have NaN'd within 10 iterations on this model.
+
+High LR damage occurred in the first 50 iterations (loss_std >1.0 during warmup
+ramp) — model overshot into bad regions early, cosine decay brought LR down
+afterward but early damage persisted to final loss. By iter 275 Config 2's LR had
+decayed from 0.1 to 0.012 — near baseline — but remained 0.53 loss units behind.
+
+### Meta-Finding Across All Instability Experiments
+Modern training infrastructure — AdamW, BF16, pre-norm LayerNorm, residual
+connections, weight tying, gradient clipping — is collectively so robust that
+engineering visible failures at small scale requires removing multiple components
+simultaneously. This is not an accident. Each technique was added in response to
+a real failure observed at scale. The failure modes that required deliberate
+engineering to produce at 12M parameters on 300K tokens are routine operational
+concerns at 70B parameters on trillion-token datasets. Scale is the multiplier
+that makes each fragility relevant.
+
+### Business Insights
+Training infrastructure robustness is a capital-intensive moat. The collective
+engineering that made our small model nearly unbreakable — AdamW, residuals,
+LayerNorm, gradient clipping — represents a decade of accumulated failure
+experience at scale. Frontier labs have additionally built checkpoint management,
+automatic anomaly detection, mid-run rollback, and loss spike recovery systems
+on top of this foundation. A company attempting to train a 70B+ model without
+this infrastructure layer is not just technically underprepared — they are
+exposed to a failure mode that costs days of compute and hundreds of thousands
+of dollars per incident. This is a meaningful barrier to entry that spec sheets
+and parameter counts don't capture.
+
+The warmup finding has a direct cost implication: a 20% permanent loss penalty
+from skipping two lines of code. At training scale, that 20% gap represents
+either a significantly worse model or a full additional training run to recover.
+Neither is acceptable. The cost of training instability is not just the failed
+run — it's the opportunity cost of the better model you didn't get.
+
+### Developer Insights
+The most dangerous failure modes are the silent ones. Gradient explosion produces
+NaN — immediately visible. Warmup misconfiguration produces a model that trains
+normally, converges cleanly, and is permanently 20% worse than it should be.
+Without a control run to compare against, you would never know. This is why
+ablation studies — running the same experiment with one variable changed — are
+standard practice before large training commitments. The control is not overhead.
+It is the only way to detect silent degradation.
+
+Log gradient norms alongside loss on every training run. The grad_norm time series
+is the earliest warning signal for instability — spikes appear before loss
+diverges. A structured CLIPPED pattern (only during warmup ramp) is healthy.
+Sporadic CLIPPED events throughout training indicate persistent instability that
+warmup didn't resolve. These two patterns look identical in the loss curve but
+are completely distinguishable in the grad_norm log.
+
+### GTM Implications
+"We train models on your data" is a claim that requires infrastructure scrutiny.
+The questions that separate operators from resellers: What is your checkpoint
+frequency? What triggers an automatic rollback? How do you detect and recover
+from mid-run loss spikes? What was your warmup schedule and how did you validate
+it? Vendors who have actually operated large training runs have immediate, specific
+answers to these questions. Vendors extrapolating from small-scale experience will
+deflect to architecture or benchmark claims.
+
+The AdamW finding is also a vendor evaluation tool. When a vendor claims their
+custom optimizer or training recipe produces superior results, the correct
+follow-up is: what is your baseline, and did you control for LR schedule, warmup,
+and gradient clipping independently? Most training recipe claims conflate multiple
+variables. The instability experiments demonstrate that isolating one variable at
+a time — while holding everything else fixed — is the only way to attribute
+performance differences to specific design choices.
